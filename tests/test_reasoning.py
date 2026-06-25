@@ -16,7 +16,7 @@ def test_reward_structure():
     reward, decisions = reasoning_tree_rewards(depth=8, n_decisions=5, rng=np.random.default_rng(0))
     assert reward.shape == (2**8,)
     assert decisions.size == 5
-    assert np.isclose(reward.max(), 1.0)        # a fully-correct trace exists
+    assert np.isclose(reward.max(), 1.0)  # a fully-correct trace exists
     assert reward.min() >= 0.0
     # exactly one in 2^5 leaves is fully correct (per distinct decision pattern)
     assert np.isclose(np.mean(np.isclose(reward, 1.0)), 2.0 ** (-5), atol=0.01)
@@ -27,7 +27,7 @@ def test_value_guided_beats_best_of_n_at_fixed_budget():
     vg = success_rate("value_guided", depth=k, n_decisions=k, budget=budget, sigma=0.3, seeds=120)
     bo = success_rate("best_of_n", depth=k, n_decisions=k, budget=budget, sigma=0.3, seeds=120)
     assert vg > 0.6
-    assert vg > bo + 0.3      # large, decisive gap
+    assert vg > bo + 0.3  # large, decisive gap
 
 
 def test_best_of_n_is_exponential_value_guided_polynomial():
@@ -44,8 +44,9 @@ def test_noiseless_value_guided_is_near_perfect():
     out = []
     for seed in range(60):
         reward, _ = reasoning_tree_rewards(depth=8, n_decisions=8, rng=np.random.default_rng(seed))
-        ok, _ = value_guided_search(reward, depth=8, probes_per_child=64, sigma=0.0,
-                                    rng=np.random.default_rng(100 + seed))
+        ok, _ = value_guided_search(
+            reward, depth=8, probes_per_child=64, sigma=0.0, rng=np.random.default_rng(100 + seed)
+        )
         out.append(ok)
     assert np.mean(out) > 0.95
 

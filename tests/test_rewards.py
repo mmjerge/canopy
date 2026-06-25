@@ -25,8 +25,11 @@ def test_leaf_means_shape():
 def test_overall_mean_equals_root_value():
     # By the zero-sum construction, the mean of all leaves equals the root value.
     means = hierarchical_gaussian_leaf_means(
-        branching=4, depth=4, sigma=geometric_sigma(base=0.6, decay=0.7),
-        root_value=0.5, rng=np.random.default_rng(2),
+        branching=4,
+        depth=4,
+        sigma=geometric_sigma(base=0.6, decay=0.7),
+        root_value=0.5,
+        rng=np.random.default_rng(2),
     )
     assert means.mean() == pytest.approx(0.5)
 
@@ -71,7 +74,12 @@ def test_spread_bound_holds_empirically():
 
 def test_adversarial_spikes_structure():
     means = adversarial_spike_leaf_means(
-        branching=4, depth=3, n_spikes=3, low=0.2, high=0.95, jitter=0.0,
+        branching=4,
+        depth=3,
+        n_spikes=3,
+        low=0.2,
+        high=0.95,
+        jitter=0.0,
         rng=np.random.default_rng(0),
     )
     assert means.shape == (64,)

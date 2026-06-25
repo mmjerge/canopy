@@ -42,16 +42,34 @@ def main() -> None:
     curves = {"global-tight L": [], "global-loose L": [], "local-adaptive L": []}
     for seed in range(N_SEEDS):
         lm = heterogeneous_smoothness_leaf_means(BRANCHING, DEPTH, np.random.default_rng(seed))
-        e1 = TreeBandit(BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1, rng=np.random.default_rng(100 + seed))
-        curves["global-tight L"].append(run_hoo(e1, HORIZON, TIGHT, np.random.default_rng(100 + seed), memory_bounded=True).cum_regret)
-        e2 = TreeBandit(BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1, rng=np.random.default_rng(100 + seed))
-        curves["global-loose L"].append(run_hoo(e2, HORIZON, LOOSE, np.random.default_rng(100 + seed), memory_bounded=True).cum_regret)
-        e3 = TreeBandit(BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1, rng=np.random.default_rng(100 + seed))
-        curves["local-adaptive L"].append(run_local_lipschitz(e3, HORIZON, np.random.default_rng(100 + seed)).cum_regret)
+        e1 = TreeBandit(
+            BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1, rng=np.random.default_rng(100 + seed)
+        )
+        curves["global-tight L"].append(
+            run_hoo(
+                e1, HORIZON, TIGHT, np.random.default_rng(100 + seed), memory_bounded=True
+            ).cum_regret
+        )
+        e2 = TreeBandit(
+            BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1, rng=np.random.default_rng(100 + seed)
+        )
+        curves["global-loose L"].append(
+            run_hoo(
+                e2, HORIZON, LOOSE, np.random.default_rng(100 + seed), memory_bounded=True
+            ).cum_regret
+        )
+        e3 = TreeBandit(
+            BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1, rng=np.random.default_rng(100 + seed)
+        )
+        curves["local-adaptive L"].append(
+            run_local_lipschitz(e3, HORIZON, np.random.default_rng(100 + seed)).cum_regret
+        )
 
     means = {k: np.mean(v, axis=0) for k, v in curves.items()}
-    print(f"heterogeneous-smoothness tree: {BRANCHING**DEPTH} leaves, horizon {HORIZON}, "
-          f"{N_SEEDS} seeds")
+    print(
+        f"heterogeneous-smoothness tree: {BRANCHING**DEPTH} leaves, horizon {HORIZON}, "
+        f"{N_SEEDS} seeds"
+    )
     for k, m in means.items():
         print(f"  {k:18s} final regret = {m[-1]:7.1f}")
 
@@ -65,7 +83,11 @@ def main() -> None:
         region_std.append(float(np.std(lm0[start:end])))
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 5.2))
-    colors = {"global-tight L": "#1f77b4", "global-loose L": "#ff7f0e", "local-adaptive L": "#d62728"}
+    colors = {
+        "global-tight L": "#1f77b4",
+        "global-loose L": "#ff7f0e",
+        "local-adaptive L": "#d62728",
+    }
     rounds = np.arange(1, HORIZON + 1)
     for k, m in means.items():
         axA.plot(rounds, m, color=colors[k], lw=2, label=k)
@@ -76,7 +98,11 @@ def main() -> None:
     axA.legend(loc="upper left", fontsize=9)
 
     regions = np.arange(len(region_std))
-    axB.bar(regions, region_std, color=["#2ca02c"] * (len(regions) // 2) + ["#8c564b"] * (len(regions) - len(regions) // 2))
+    axB.bar(
+        regions,
+        region_std,
+        color=["#2ca02c"] * (len(regions) // 2) + ["#8c564b"] * (len(regions) - len(regions) // 2),
+    )
     axB.set_xlabel(f"prefix region (level {resolution})")
     axB.set_ylabel("true within-region spread (local smoothness)")
     axB.set_title("Heterogeneous smoothness: left smooth, right rough", fontsize=10)

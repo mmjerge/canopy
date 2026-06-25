@@ -31,8 +31,9 @@ LAM = 0.3
 
 def run(strategy: str, seed: int, **kw) -> "object":
     q, costs = make_routing_scenario(BRANCHING, DEPTH, np.random.default_rng(seed))
-    env = PrefixTreeRouting(BRANCHING, DEPTH, q, costs, lam=LAM, noise_std=0.1,
-                            rng=np.random.default_rng(100 + seed))
+    env = PrefixTreeRouting(
+        BRANCHING, DEPTH, q, costs, lam=LAM, noise_std=0.1, rng=np.random.default_rng(100 + seed)
+    )
     return run_router(env, HORIZON, np.random.default_rng(100 + seed), strategy=strategy, **kw)
 
 
@@ -45,8 +46,10 @@ def main() -> None:
         ("oracle", {}, "#2ca02c"),
     ]
     curves, points = {}, {}
-    print(f"prefix-tree routing: {BRANCHING**DEPTH} prompts, horizon {HORIZON}, "
-          f"{N_SEEDS} seeds, lam={LAM}")
+    print(
+        f"prefix-tree routing: {BRANCHING**DEPTH} prompts, horizon {HORIZON}, "
+        f"{N_SEEDS} seeds, lam={LAM}"
+    )
     for strat, kw, _ in methods:
         regs, costs, quals = [], [], []
         for seed in range(N_SEEDS):
@@ -57,8 +60,10 @@ def main() -> None:
         label = run(strat, 0, **kw).label
         curves[label] = (np.mean(regs, axis=0), methods)
         points[label] = (float(np.mean(costs)) / HORIZON, float(np.mean(quals)))
-        print(f"  {label:20s} regret={np.mean(regs, axis=0)[-1]:8.1f}  "
-              f"cost/query={points[label][0]:.3f}  avg_quality={points[label][1]:.3f}")
+        print(
+            f"  {label:20s} regret={np.mean(regs, axis=0)[-1]:8.1f}  "
+            f"cost/query={points[label][0]:.3f}  avg_quality={points[label][1]:.3f}"
+        )
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 5.2))
     rounds = np.arange(1, HORIZON + 1)
@@ -75,17 +80,27 @@ def main() -> None:
     axA.legend(loc="upper left", fontsize=8)
 
     for label, (cpq, qual) in points.items():
-        axB.scatter([cpq], [qual], color=color_of[label], s=90,
-                    marker="*" if label == "oracle" else "o", zorder=3)
+        axB.scatter(
+            [cpq],
+            [qual],
+            color=color_of[label],
+            s=90,
+            marker="*" if label == "oracle" else "o",
+            zorder=3,
+        )
         axB.annotate(label, (cpq, qual), fontsize=8, xytext=(5, 4), textcoords="offset points")
     axB.set_xlabel("cost per query")
     axB.set_ylabel("average quality")
-    axB.set_title("Cost vs quality: router approaches the oracle\nat lower cost than "
-                  "always-big", fontsize=10)
+    axB.set_title(
+        "Cost vs quality: router approaches the oracle\nat lower cost than " "always-big",
+        fontsize=10,
+    )
     axB.grid(True, ls=":", alpha=0.5)
 
-    fig.suptitle("LLM routing over a prefix tree: hierarchical generalization beats fixed "
-                 "policies", fontsize=11)
+    fig.suptitle(
+        "LLM routing over a prefix tree: hierarchical generalization beats fixed " "policies",
+        fontsize=11,
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     out = Path(__file__).parent / "images" / "tree_llm_routing.png"
     out.parent.mkdir(exist_ok=True)

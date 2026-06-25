@@ -42,7 +42,11 @@ BEAM = 20
 
 def make_env(seed: int, probe_cost: float) -> TreeBandit:
     return TreeBandit.from_hierarchical_gaussian(
-        BRANCHING, DEPTH, sigma=SIGMA, noise_std=0.1, probe_cost=probe_cost,
+        BRANCHING,
+        DEPTH,
+        sigma=SIGMA,
+        noise_std=0.1,
+        probe_cost=probe_cost,
         rng=np.random.default_rng(seed),
     )
 
@@ -77,8 +81,11 @@ def fidelity_panel(ax) -> None:
     ax.invert_xaxis()  # cheaper probes to the right
     ax.set_xlabel("probe cost / leaf cost  (cheaper probes ->)")
     ax.set_ylabel(f"mean top-{K} recall ({N_SEEDS} seeds)")
-    ax.set_title(f"The tree wins only when probes are cheap enough\n"
-                 f"budget={budget:.0f} cost, beam={BEAM}", fontsize=10)
+    ax.set_title(
+        f"The tree wins only when probes are cheap enough\n"
+        f"budget={budget:.0f} cost, beam={BEAM}",
+        fontsize=10,
+    )
     ax.set_ylim(0, 1.02)
     ax.grid(True, which="both", ls=":", alpha=0.5)
     ax.legend(loc="upper left")
@@ -94,21 +101,26 @@ def cost_budget_panel(ax) -> None:
         print(f"  {method:15s} " + " ".join(f"{y:.2f}" for y in ys))
     ax.set_xscale("log")
     ax.set_xlabel("cost budget")
-    ax.set_title(f"Recall vs budget with cheap biased probes (probe/leaf = {probe_cost})\n"
-                 f"beam={BEAM}", fontsize=10)
+    ax.set_title(
+        f"Recall vs budget with cheap biased probes (probe/leaf = {probe_cost})\n" f"beam={BEAM}",
+        fontsize=10,
+    )
     ax.set_ylim(0, 1.02)
     ax.grid(True, which="both", ls=":", alpha=0.5)
     ax.legend(loc="lower right")
 
 
 def main() -> None:
-    print(f"tree: {LEAVES} leaves, branching={BRANCHING}, depth={DEPTH}, top-{K}, "
-          f"{N_SEEDS} seeds")
+    print(
+        f"tree: {LEAVES} leaves, branching={BRANCHING}, depth={DEPTH}, top-{K}, " f"{N_SEEDS} seeds"
+    )
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.4), sharey=True)
     fidelity_panel(axes[0])
     cost_budget_panel(axes[1])
-    fig.suptitle(f"Multi-fidelity tree top-k: {LEAVES} leaves, branching={BRANCHING}, "
-                 f"depth={DEPTH}", fontsize=12)
+    fig.suptitle(
+        f"Multi-fidelity tree top-k: {LEAVES} leaves, branching={BRANCHING}, " f"depth={DEPTH}",
+        fontsize=12,
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     out = Path(__file__).parent / "images" / "tree_topk_benchmark.png"
     out.parent.mkdir(exist_ok=True)

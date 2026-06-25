@@ -8,7 +8,9 @@ from canopy.bandits import PrefixCacheEnv, offline_optimal, run_cache
 
 
 def _stream(seed, horizon=8000, shift_at=None):
-    return PrefixCacheEnv(shift_at=shift_at, rng=np.random.default_rng(seed)).generate_stream(horizon)
+    return PrefixCacheEnv(shift_at=shift_at, rng=np.random.default_rng(seed)).generate_stream(
+        horizon
+    )
 
 
 def test_resident_stays_ancestor_closed_and_within_budget():

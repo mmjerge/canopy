@@ -39,6 +39,7 @@ def main() -> None:
     args = ap.parse_args()
 
     from canopy.bandits.bedrock import BedrockClient
+
     client = BedrockClient(region=args.region, max_tokens=512)
     problems = load_gsm8k(args.n_problems)
 
@@ -51,21 +52,40 @@ def main() -> None:
 
     tally = {"best_of_n": 0, "vg_self": 0, "vg_oracle": 0}
     for i, (q, gold) in enumerate(problems):
+
         def oracle_value(rolls, _gold=gold):
             from canopy.bandits.reasoning_llm import _normalize
+
             return sum(extract_answer(t) == _normalize(_gold) for t in rolls) / max(1, len(rolls))
 
         bo = best_of_n(q, gold, generate, n=vg_calls)
-        vs = value_guided_search(q, gold, generate, args.branching, args.n_steps, args.rollouts,
-                                 final_rollouts=args.final_rollouts)
-        vo = value_guided_search(q, gold, generate, args.branching, args.n_steps, args.rollouts,
-                                 value_fn=oracle_value, final_rollouts=args.final_rollouts)
+        vs = value_guided_search(
+            q,
+            gold,
+            generate,
+            args.branching,
+            args.n_steps,
+            args.rollouts,
+            final_rollouts=args.final_rollouts,
+        )
+        vo = value_guided_search(
+            q,
+            gold,
+            generate,
+            args.branching,
+            args.n_steps,
+            args.rollouts,
+            value_fn=oracle_value,
+            final_rollouts=args.final_rollouts,
+        )
         tally["best_of_n"] += bo.correct
         tally["vg_self"] += vs.correct
         tally["vg_oracle"] += vo.correct
-        print(f"[{i+1}/{len(problems)}] gold={gold:>7}  bo={bo.answer}({int(bo.correct)})  "
-              f"vg_self={vs.answer}({int(vs.correct)})  vg_oracle={vo.answer}({int(vo.correct)})",
-              flush=True)
+        print(
+            f"[{i+1}/{len(problems)}] gold={gold:>7}  bo={bo.answer}({int(bo.correct)})  "
+            f"vg_self={vs.answer}({int(vs.correct)})  vg_oracle={vo.answer}({int(vo.correct)})",
+            flush=True,
+        )
 
     n = len(problems)
     print(f"\nGSM8K {n} problems, matched budget ~{vg_calls} calls, model {args.model}")

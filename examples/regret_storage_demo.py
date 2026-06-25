@@ -74,9 +74,8 @@ def main() -> None:
     var_mem_mean = float(np.mean(var_mem))
     fixed_mean = {d: np.mean(fixed_curves[d], axis=0) for d in depths}
 
-    print(f"tree: {BRANCHING**DEPTH} leaves, depth={DEPTH}, horizon={HORIZON}, "
-          f"{N_SEEDS} seeds")
-    print(f"adaptive (assumed spread): final regret={adaptive_mean[-1]:.0f}  mem={adaptive_mem_mean:.0f}")
+    print(f"tree: {BRANCHING**DEPTH} leaves, depth={DEPTH}, horizon={HORIZON}, " f"{N_SEEDS} seeds")
+    print(f"adaptive (assumed spread): regret={adaptive_mean[-1]:.0f} mem={adaptive_mem_mean:.0f}")
     print(f"adaptive-variance (novel): final regret={var_mean[-1]:.0f}  mem={var_mem_mean:.0f}")
     for d in depths:
         print(f"fixed-depth {d}: final regret={fixed_mean[d][-1]:.0f}  mem={fixed_mem[d]}")
@@ -90,10 +89,20 @@ def main() -> None:
     for color, d in zip(cmap, show):
         label = f"fixed depth {d} (mem {fixed_mem[d]})" + (" = full leaves" if d == DEPTH else "")
         axA.plot(rounds, fixed_mean[d], color=color, lw=1.8, label=label)
-    axA.plot(rounds, adaptive_mean, color="#ff7f0e", lw=2.2,
-             label=f"adaptive, assumed spread (mem {adaptive_mem_mean:.0f})")
-    axA.plot(rounds, var_mean, color="#d62728", lw=2.6,
-             label=f"adaptive, variance-aware (mem {var_mem_mean:.0f})")
+    axA.plot(
+        rounds,
+        adaptive_mean,
+        color="#ff7f0e",
+        lw=2.2,
+        label=f"adaptive, assumed spread (mem {adaptive_mem_mean:.0f})",
+    )
+    axA.plot(
+        rounds,
+        var_mean,
+        color="#d62728",
+        lw=2.6,
+        label=f"adaptive, variance-aware (mem {var_mem_mean:.0f})",
+    )
     axA.set_xlabel("round")
     axA.set_ylabel("cumulative regret")
     axA.set_title("Regret over time", fontsize=10)
@@ -105,12 +114,23 @@ def main() -> None:
     finals = [fixed_mean[d][-1] for d in depths]
     axB.plot(mems, finals, "o-", color="#1f77b4", label="fixed depth (frontier)")
     for d, mm, ff in zip(depths, mems, finals):
-        axB.annotate(f"d={d}", (mm, ff), fontsize=8, xytext=(4, 4),
-                     textcoords="offset points")
-    axB.plot([adaptive_mem_mean], [adaptive_mean[-1]], "P", color="#ff7f0e",
-             markersize=13, label="adaptive (assumed spread)")
-    axB.plot([var_mem_mean], [var_mean[-1]], "*", color="#d62728",
-             markersize=17, label="adaptive (variance-aware)")
+        axB.annotate(f"d={d}", (mm, ff), fontsize=8, xytext=(4, 4), textcoords="offset points")
+    axB.plot(
+        [adaptive_mem_mean],
+        [adaptive_mean[-1]],
+        "P",
+        color="#ff7f0e",
+        markersize=13,
+        label="adaptive (assumed spread)",
+    )
+    axB.plot(
+        [var_mem_mean],
+        [var_mean[-1]],
+        "*",
+        color="#d62728",
+        markersize=17,
+        label="adaptive (variance-aware)",
+    )
     axB.set_xscale("log")
     axB.set_xlabel("peak memory (nodes tracked)")
     axB.set_ylabel("final cumulative regret")
@@ -118,8 +138,11 @@ def main() -> None:
     axB.grid(True, which="both", ls=":", alpha=0.5)
     axB.legend(loc="upper right", fontsize=8)
 
-    fig.suptitle("Adaptive expansion (expand when r(v) <= spread/heterogeneity) is "
-                 "near regret-optimal at a fraction of the memory", fontsize=11)
+    fig.suptitle(
+        "Adaptive expansion (expand when r(v) <= spread/heterogeneity) is "
+        "near regret-optimal at a fraction of the memory",
+        fontsize=11,
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     out = Path(__file__).parent / "images" / "tree_regret_storage.png"
     out.parent.mkdir(exist_ok=True)

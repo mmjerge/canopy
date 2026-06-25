@@ -34,16 +34,23 @@ TARGET = 0.8
 
 def budget_to_target(method: str, k: int) -> int | None:
     for b in BUDGETS:
-        if success_rate(method, depth=k, n_decisions=k, budget=b, sigma=SIGMA, seeds=SEEDS) >= TARGET:
+        if (
+            success_rate(method, depth=k, n_decisions=k, budget=b, sigma=SIGMA, seeds=SEEDS)
+            >= TARGET
+        ):
             return b
     return None
 
 
 def main() -> None:
-    print(f"reasoning tree (binary), reward = fraction of K decisions correct, noise {SIGMA}, "
-          f"{SEEDS} seeds")
-    print(f"{'K':>3} {'best-of-N':>12} {'value-guided':>14}   (budget to reach "
-          f"{int(TARGET*100)}% fully-correct)")
+    print(
+        f"reasoning tree (binary), reward = fraction of K decisions correct, noise {SIGMA}, "
+        f"{SEEDS} seeds"
+    )
+    print(
+        f"{'K':>3} {'best-of-N':>12} {'value-guided':>14}   (budget to reach "
+        f"{int(TARGET*100)}% fully-correct)"
+    )
     bo_budgets, vg_budgets = [], []
     for k in K_VALUES:
         b_bo = budget_to_target("best_of_n", k)
@@ -51,8 +58,10 @@ def main() -> None:
         bo_budgets.append(b_bo)
         vg_budgets.append(b_vg)
         print(f"{k:3d} {str(b_bo):>12} {str(b_vg):>14}")
-    print("\nbest-of-N needs exponentially many samples (fails within budget for K>=6); "
-          "value-guided\nsearch follows the value edges and succeeds at polynomial cost.")
+    print(
+        "\nbest-of-N needs exponentially many samples (fails within budget for K>=6); "
+        "value-guided\nsearch follows the value edges and succeeds at polynomial cost."
+    )
 
     # success-vs-budget at a fixed K, for the curves panel
     k_fixed = 8
@@ -83,17 +92,26 @@ def main() -> None:
     axB.semilogy(K_VALUES, vg_plot, "-o", color="#27ae60", lw=2, label="value-guided (edges)")
     axB.semilogy(K_VALUES, bo_plot, "-s", color="#c0392b", lw=2, label="best-of-N")
     axB.axhline(BUDGETS[-1], color="#7f8c8d", ls=":", lw=1)
-    axB.text(K_VALUES[0], cap, "best-of-N fails within budget →", color="#c0392b", fontsize=8,
-             va="bottom")
+    axB.text(
+        K_VALUES[0],
+        cap,
+        "best-of-N fails within budget →",
+        color="#c0392b",
+        fontsize=8,
+        va="bottom",
+    )
     axB.set_xlabel("number of decision steps K")
     axB.set_ylabel(f"budget to reach {int(TARGET*100)}% (log)")
-    axB.set_title("(B) Best-of-N is exponential in K; value-guided is polynomial",
-                  fontsize=11, loc="left")
+    axB.set_title(
+        "(B) Best-of-N is exponential in K; value-guided is polynomial", fontsize=11, loc="left"
+    )
     axB.grid(True, which="both", ls=":", alpha=0.4)
     axB.legend(loc="upper left", fontsize=9)
 
-    fig.suptitle("Value-guided reasoning-tree search finds the correct trace where best-of-N "
-                 "cannot", fontsize=12)
+    fig.suptitle(
+        "Value-guided reasoning-tree search finds the correct trace where best-of-N " "cannot",
+        fontsize=12,
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     out = Path(__file__).parent / "images" / "tree_reasoning_search.png"
     out.parent.mkdir(exist_ok=True)

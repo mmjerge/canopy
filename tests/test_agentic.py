@@ -29,8 +29,7 @@ def test_gridworld_dynamics():
 
 
 def test_walls_block_movement():
-    env = GridWorld(size=3, goal=(2, 2), start=(0, 0), horizon=10,
-                    walls=frozenset({(0, 1)}))
+    env = GridWorld(size=3, goal=(2, 2), start=(0, 0), horizon=10, walls=frozenset({(0, 1)}))
     assert env.step((0, 0), 3) == (0, 0)  # blocked by wall to the right
     assert env.step((0, 0), 1) == (1, 0)  # down is open
 

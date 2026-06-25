@@ -43,9 +43,7 @@ def test_internal_node_value_is_subtree_leaf_average():
 
 
 def test_parent_equals_mean_of_children():
-    env = TreeBandit.from_hierarchical_gaussian(
-        branching=4, depth=3, rng=np.random.default_rng(1)
-    )
+    env = TreeBandit.from_hierarchical_gaussian(branching=4, depth=3, rng=np.random.default_rng(1))
     for level in range(env.depth):
         for idx in range(env.branching**level):
             parent = Node(level, idx)
@@ -60,8 +58,13 @@ def test_top_k_leaves_matches_argsort():
 
 
 def test_sample_counts_tries_and_is_unbiased():
-    env = TreeBandit(branching=2, depth=2, leaf_means=np.array([0.0, 0.0, 0.0, 1.0]),
-                     noise_std=0.1, rng=np.random.default_rng(3))
+    env = TreeBandit(
+        branching=2,
+        depth=2,
+        leaf_means=np.array([0.0, 0.0, 0.0, 1.0]),
+        noise_std=0.1,
+        rng=np.random.default_rng(3),
+    )
     leaf = Node(2, 3)
     obs = [env.sample(leaf) for _ in range(5000)]
     assert env.n_pulls == 5000
@@ -69,11 +72,17 @@ def test_sample_counts_tries_and_is_unbiased():
 
 
 def test_cost_accounting_distinguishes_probes_and_leaves():
-    env = TreeBandit(branching=2, depth=2, leaf_means=np.zeros(4),
-                     leaf_cost=1.0, probe_cost=0.1, rng=np.random.default_rng(0))
-    env.sample(env.root())        # internal probe -> 0.1
-    env.sample(Node(1, 0))        # internal probe -> 0.1
-    env.sample(Node(2, 0))        # leaf eval     -> 1.0
+    env = TreeBandit(
+        branching=2,
+        depth=2,
+        leaf_means=np.zeros(4),
+        leaf_cost=1.0,
+        probe_cost=0.1,
+        rng=np.random.default_rng(0),
+    )
+    env.sample(env.root())  # internal probe -> 0.1
+    env.sample(Node(1, 0))  # internal probe -> 0.1
+    env.sample(Node(2, 0))  # leaf eval     -> 1.0
     assert env.n_pulls == 3
     assert env.total_cost == pytest.approx(1.2)
 

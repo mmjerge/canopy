@@ -212,7 +212,7 @@ def run_adaptive_variance(
         cum += mu_star - env.true_value(v)
         cum_regret[t] = cum
 
-        if (v.level < env.depth and count >= n_min and radius(v) <= bias_proxy(v)):
+        if v.level < env.depth and count >= n_min and radius(v) <= bias_proxy(v):
             frontier.remove(v)
             for child in env.children(v):
                 stats[child] = [1.0, mean, 0.0] if warm_start else [0.0, 0.0, 0.0]
@@ -246,8 +246,9 @@ def run_adaptive_mgf(
 
     # stats[node] = [count, mean, M2, sum_exp(K,), sum_exp2(K,)]
     frontier: list[Node] = list(env.children(env.root()))
-    stats: dict[Node, list] = {nd: [0.0, 0.0, 0.0, np.zeros(len(lambdas)),
-                                    np.zeros(len(lambdas))] for nd in frontier}
+    stats: dict[Node, list] = {
+        nd: [0.0, 0.0, 0.0, np.zeros(len(lambdas)), np.zeros(len(lambdas))] for nd in frontier
+    }
 
     def radius(node: Node) -> float:
         count, _, m2, _, _ = stats[node]
@@ -261,8 +262,14 @@ def run_adaptive_mgf(
         if count < n_min:
             return math.inf
         return mgf_bound_from_moments(
-            int(count), mean, se, se2, lambdas, env.leaves_per_node(node.level),
-            env.noise_std, delta=delta,
+            int(count),
+            mean,
+            se,
+            se2,
+            lambdas,
+            env.leaves_per_node(node.level),
+            env.noise_std,
+            delta=delta,
         )
 
     cum = 0.0
@@ -298,11 +305,15 @@ def run_adaptive_mgf(
             frontier.remove(v)
             for child in env.children(v):
                 if warm_start:
-                    stats[child] = [1.0, mean, 0.0, np.exp(lambdas * mean),
-                                    np.exp(2.0 * lambdas * mean)]
+                    stats[child] = [
+                        1.0,
+                        mean,
+                        0.0,
+                        np.exp(lambdas * mean),
+                        np.exp(2.0 * lambdas * mean),
+                    ]
                 else:
-                    stats[child] = [0.0, 0.0, 0.0, np.zeros(len(lambdas)),
-                                    np.zeros(len(lambdas))]
+                    stats[child] = [0.0, 0.0, 0.0, np.zeros(len(lambdas)), np.zeros(len(lambdas))]
                 frontier.append(child)
 
     return RegretResult(cum_regret=cum_regret, memory=len(stats), label="adaptive-mgf")
@@ -377,8 +388,11 @@ def run_hoo(
         # refresh U and B bottom-up along the path
         for nd in reversed(path):
             n = count[nd]
-            u = (math.inf if n == 0
-                 else mean[nd] + c * math.sqrt(2.0 * math.log(t + 1) / n) + spread(nd.level))
+            u = (
+                math.inf
+                if n == 0
+                else mean[nd] + c * math.sqrt(2.0 * math.log(t + 1) / n) + spread(nd.level)
+            )
             if nd in expanded:
                 bval[nd] = min(u, max(bval[ch] for ch in env.children(nd)))
             else:
@@ -704,5 +718,10 @@ def multiscale_edge_map(
         leaf_score = np.maximum(leaf_score, np.repeat(norm, span))
         flagged.extend((level, c) for c in range(n_cells) if ws[c] > lvl_floor)
 
-    return MultiscaleEdgeMap(levels=list(levels), within_std=within_std, floor=floor,
-                             leaf_score=leaf_score, flagged=flagged)
+    return MultiscaleEdgeMap(
+        levels=list(levels),
+        within_std=within_std,
+        floor=floor,
+        leaf_score=leaf_score,
+        flagged=flagged,
+    )

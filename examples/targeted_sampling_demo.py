@@ -48,28 +48,45 @@ TARGET_ACC = 0.7
 
 
 def env_for(lm: np.ndarray, seed: int) -> TreeBandit:
-    return TreeBandit(BRANCHING, DEPTH, leaf_means=lm, noise_std=NOISE,
-                      leaf_cost=LEAF_COST, probe_cost=PROBE_COST,
-                      rng=np.random.default_rng(seed))
+    return TreeBandit(
+        BRANCHING,
+        DEPTH,
+        leaf_means=lm,
+        noise_std=NOISE,
+        leaf_cost=LEAF_COST,
+        probe_cost=PROBE_COST,
+        rng=np.random.default_rng(seed),
+    )
 
 
 def accuracy_at(budget: float) -> tuple[float, float, float]:
     blind, smooth, edge = [], [], []
     cell = BRANCHING ** (DEPTH - LEVEL)
     for seed in range(N_SEEDS):
-        lm = adversarial_spike_leaf_means(BRANCHING, DEPTH, K_VIOLATIONS,
-                                          rng=np.random.default_rng(seed))
+        lm = adversarial_spike_leaf_means(
+            BRANCHING, DEPTH, K_VIOLATIONS, rng=np.random.default_rng(seed)
+        )
         e = env_for(lm, 40 + seed)
         blind.append(SuccessiveEliminationTopK(budget, 0.1).run(e, 1).evaluate(e, 1))
         e = env_for(lm, 40 + seed)
-        smooth.append(HierarchicalTopK(budget, 0.1, spread=SPREAD, beam_width=BEAM).run(e, 1).evaluate(e, 1))
+        smooth.append(
+            HierarchicalTopK(budget, 0.1, spread=SPREAD, beam_width=BEAM).run(e, 1).evaluate(e, 1)
+        )
         # edge isolation from cheap probes -> relax + target those cells
-        det = detect_violations(env_for(lm, 80 + seed), LEVEL, lambda _l: FLOOR,
-                                np.random.default_rng(80 + seed), n_samples_per_cell=30).detected
+        det = detect_violations(
+            env_for(lm, 80 + seed),
+            LEVEL,
+            lambda _l: FLOOR,
+            np.random.default_rng(80 + seed),
+            n_samples_per_cell=30,
+        ).detected
         ranges = [(c * cell, (c + 1) * cell) for c in det]
         e = env_for(lm, 40 + seed)
-        edge.append(HierarchicalTopK(budget, 0.1, spread=SPREAD, beam_width=BEAM,
-                                     relaxed_ranges=ranges).run(e, 1).evaluate(e, 1))
+        edge.append(
+            HierarchicalTopK(budget, 0.1, spread=SPREAD, beam_width=BEAM, relaxed_ranges=ranges)
+            .run(e, 1)
+            .evaluate(e, 1)
+        )
     return float(np.mean(blind)), float(np.mean(smooth)), float(np.mean(edge))
 
 
@@ -81,8 +98,10 @@ def budget_to_reach(curve: list[float], target: float) -> float | None:
 
 
 def main() -> None:
-    print(f"tree: branching {BRANCHING}, depth {DEPTH}, {K_VIOLATIONS} hidden violations, "
-          f"probe/leaf = {PROBE_COST}, {N_SEEDS} seeds")
+    print(
+        f"tree: branching {BRANCHING}, depth {DEPTH}, {K_VIOLATIONS} hidden violations, "
+        f"probe/leaf = {PROBE_COST}, {N_SEEDS} seeds"
+    )
     print(f"{'budget':>7s} {'blind':>7s} {'assume-smooth':>14s} {'edge-targeted':>14s}")
     blind_c, smooth_c, edge_c = [], [], []
     for b in BUDGETS:
@@ -95,10 +114,14 @@ def main() -> None:
     b_edge = budget_to_reach(edge_c, TARGET_ACC)
     b_blind = budget_to_reach(blind_c, TARGET_ACC)
     if b_edge and b_blind:
-        print(f"\nbudget to reach {TARGET_ACC:.0%} accuracy: edge-targeted {b_edge}, "
-              f"blind {b_blind}  ->  {b_blind / b_edge:.1f}x more sample-efficient")
-    print("edge-targeted isolates the sharp edges from cheap probes and samples around them;\n"
-          "blind needs far more budget, assume-smooth prunes the hidden optimum and stalls.")
+        print(
+            f"\nbudget to reach {TARGET_ACC:.0%} accuracy: edge-targeted {b_edge}, "
+            f"blind {b_blind}  ->  {b_blind / b_edge:.1f}x more sample-efficient"
+        )
+    print(
+        "edge-targeted isolates the sharp edges from cheap probes and samples around them;\n"
+        "blind needs far more budget, assume-smooth prunes the hidden optimum and stalls."
+    )
 
     try:
         import matplotlib.pyplot as plt

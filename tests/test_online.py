@@ -19,8 +19,13 @@ from canopy.bandits.tree import Node
 
 
 def test_play_is_unbiased_for_subtree_average():
-    env = TreeBandit(branching=2, depth=2, leaf_means=np.array([0.0, 0.2, 0.8, 1.0]),
-                     noise_std=0.05, rng=np.random.default_rng(0))
+    env = TreeBandit(
+        branching=2,
+        depth=2,
+        leaf_means=np.array([0.0, 0.2, 0.8, 1.0]),
+        noise_std=0.05,
+        rng=np.random.default_rng(0),
+    )
     node = Node(1, 0)  # covers leaves [0.0, 0.2], true value 0.1
     rng = np.random.default_rng(1)
     obs = [env.play(node, rng) for _ in range(20000)]
@@ -53,22 +58,35 @@ def test_adaptive_beats_root_and_saves_memory_vs_full():
     adaptive_mem = []
     for seed in range(5):
         env = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=geometric_sigma(0.5, 0.55), noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=geometric_sigma(0.5, 0.55),
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
         a = run_adaptive(env, horizon, spread, np.random.default_rng(100 + seed))
         adaptive.append(a.final_regret)
         adaptive_mem.append(a.memory)
         env0 = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=geometric_sigma(0.5, 0.55), noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=geometric_sigma(0.5, 0.55),
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        root.append(run_fixed_depth(env0, 0, horizon, np.random.default_rng(100 + seed)).final_regret)
+        root.append(
+            run_fixed_depth(env0, 0, horizon, np.random.default_rng(100 + seed)).final_regret
+        )
         envD = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=geometric_sigma(0.5, 0.55), noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=geometric_sigma(0.5, 0.55),
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        full.append(run_fixed_depth(envD, depth, horizon, np.random.default_rng(100 + seed)).final_regret)
+        full.append(
+            run_fixed_depth(envD, depth, horizon, np.random.default_rng(100 + seed)).final_regret
+        )
     # Adaptive crushes the root-only (pure bias) baseline ...
     assert np.mean(adaptive) < np.mean(root)
     # ... and tracks full-resolution regret while using far less memory than 256.
@@ -83,17 +101,25 @@ def test_variance_aware_is_competitive_and_memory_light():
     var_regret, var_mem, full = [], [], []
     for seed in range(5):
         env = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=geometric_sigma(0.5, 0.55), noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=geometric_sigma(0.5, 0.55),
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
         r = run_adaptive_variance(env, horizon, np.random.default_rng(200 + seed))
         var_regret.append(r.final_regret)
         var_mem.append(r.memory)
         envD = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=geometric_sigma(0.5, 0.55), noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=geometric_sigma(0.5, 0.55),
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        full.append(run_fixed_depth(envD, depth, horizon, np.random.default_rng(200 + seed)).final_regret)
+        full.append(
+            run_fixed_depth(envD, depth, horizon, np.random.default_rng(200 + seed)).final_regret
+        )
     assert np.all(np.array(var_regret) >= 0)
     assert np.mean(var_mem) < branching**depth
     assert np.mean(var_regret) < 1.5 * np.mean(full)
@@ -115,18 +141,26 @@ def test_hoo_runs_and_beats_root():
     hoo, root = [], []
     for seed in range(4):
         env = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=geometric_sigma(0.5, 0.55), noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=geometric_sigma(0.5, 0.55),
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
         r = run_hoo(env, horizon, spread, np.random.default_rng(300 + seed))
         assert r.cum_regret.shape == (horizon,)
         assert np.all(np.diff(r.cum_regret) >= -1e-9)
         hoo.append(r.final_regret)
         env0 = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=geometric_sigma(0.5, 0.55), noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=geometric_sigma(0.5, 0.55),
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        root.append(run_fixed_depth(env0, 0, horizon, np.random.default_rng(300 + seed)).final_regret)
+        root.append(
+            run_fixed_depth(env0, 0, horizon, np.random.default_rng(300 + seed)).final_regret
+        )
     assert np.mean(hoo) < np.mean(root)
 
 
@@ -135,13 +169,15 @@ def test_hoo_memory_bounded_compresses_on_deep_tree():
     branching, depth, horizon = 3, 8, 8000
     spread = hierarchical_spread(geometric_sigma(0.5, 0.6), depth, branching, z=3.0)
     env = TreeBandit.from_hierarchical_gaussian(
-        branching, depth, sigma=geometric_sigma(0.5, 0.6), noise_std=0.1,
-        rng=np.random.default_rng(0)
+        branching,
+        depth,
+        sigma=geometric_sigma(0.5, 0.6),
+        noise_std=0.1,
+        rng=np.random.default_rng(0),
     )
     res = run_hoo(env, horizon, spread, np.random.default_rng(1), memory_bounded=True)
     total_nodes = sum(branching**level for level in range(depth + 1))
     assert res.memory < total_nodes / 10  # finite-state compression
-
 
 
 def test_data_driven_robust_to_hidden_jumps():
@@ -152,18 +188,30 @@ def test_data_driven_robust_to_hidden_jumps():
     assumed, datadriven = [], []
     for seed in range(6):
         env = TreeBandit.from_piecewise_smooth(
-            branching, depth, n_jumps=4, jump_width=4, noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            n_jumps=4,
+            jump_width=4,
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        assumed.append(run_hoo(env, horizon, spread_smooth, np.random.default_rng(100 + seed),
-                               memory_bounded=True).final_regret)
+        assumed.append(
+            run_hoo(
+                env, horizon, spread_smooth, np.random.default_rng(100 + seed), memory_bounded=True
+            ).final_regret
+        )
         env2 = TreeBandit.from_piecewise_smooth(
-            branching, depth, n_jumps=4, jump_width=4, noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            n_jumps=4,
+            jump_width=4,
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        datadriven.append(run_adaptive_variance(env2, horizon, np.random.default_rng(100 + seed)).final_regret)
+        datadriven.append(
+            run_adaptive_variance(env2, horizon, np.random.default_rng(100 + seed)).final_regret
+        )
     assert np.mean(datadriven) < np.mean(assumed)
-
 
 
 def test_hybrid_beats_assumed_smooth_on_hidden_jumps():
@@ -174,15 +222,34 @@ def test_hybrid_beats_assumed_smooth_on_hidden_jumps():
     assumed, hybrid = [], []
     for seed in range(6):
         env = TreeBandit.from_piecewise_smooth(
-            branching, depth, n_jumps=4, jump_width=4, noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            n_jumps=4,
+            jump_width=4,
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        assumed.append(run_hoo(env, horizon, spread_smooth, np.random.default_rng(100 + seed),
-                               memory_bounded=True).final_regret)
+        assumed.append(
+            run_hoo(
+                env, horizon, spread_smooth, np.random.default_rng(100 + seed), memory_bounded=True
+            ).final_regret
+        )
         env2 = TreeBandit.from_piecewise_smooth(
-            branching, depth, n_jumps=4, jump_width=4, noise_std=0.1,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            n_jumps=4,
+            jump_width=4,
+            noise_std=0.1,
+            rng=np.random.default_rng(seed),
         )
-        hybrid.append(run_hybrid(env2, horizon, spread_smooth, np.random.default_rng(100 + seed),
-                                 jump_factor=0.5, n_min=8).final_regret)
+        hybrid.append(
+            run_hybrid(
+                env2,
+                horizon,
+                spread_smooth,
+                np.random.default_rng(100 + seed),
+                jump_factor=0.5,
+                n_min=8,
+            ).final_regret
+        )
     assert np.mean(hybrid) < np.mean(assumed)

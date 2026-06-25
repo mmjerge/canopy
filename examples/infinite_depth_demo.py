@@ -36,8 +36,9 @@ def main() -> None:
             env = TreeBandit.from_hierarchical_gaussian(
                 BRANCHING, depth, sigma=SIGMA, noise_std=0.1, rng=np.random.default_rng(seed)
             )
-            r = run_hoo(env, HORIZON, spread, np.random.default_rng(1000 + seed),
-                        memory_bounded=True)
+            r = run_hoo(
+                env, HORIZON, spread, np.random.default_rng(1000 + seed), memory_bounded=True
+            )
             mems.append(r.memory)
             regs.append(r.final_regret)
             cs.append(r.cum_regret)
@@ -46,19 +47,32 @@ def main() -> None:
         mem_std.append(np.std(mems))
         regret.append(np.mean(regs))
         curves[depth] = np.mean(cs, axis=0)
-        print(f"depth {depth:2d}: total_nodes={total_nodes[-1]:8d}  "
-              f"HOO mem={mem[-1]:6.1f}  regret={regret[-1]:7.1f}")
+        print(
+            f"depth {depth:2d}: total_nodes={total_nodes[-1]:8d}  "
+            f"HOO mem={mem[-1]:6.1f}  regret={regret[-1]:7.1f}"
+        )
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 5.2))
 
     axA.plot(DEPTHS, total_nodes, "s--", color="#7f7f7f", label="total nodes in tree")
-    axA.errorbar(DEPTHS, mem, yerr=mem_std, marker="o", color="#d62728", lw=2,
-                 capsize=3, label="memory-bounded HOO (nodes explored)")
+    axA.errorbar(
+        DEPTHS,
+        mem,
+        yerr=mem_std,
+        marker="o",
+        color="#d62728",
+        lw=2,
+        capsize=3,
+        label="memory-bounded HOO (nodes explored)",
+    )
     axA.set_yscale("log")
     axA.set_xlabel("tree depth")
     axA.set_ylabel("nodes (log scale)")
-    axA.set_title("Finite-state compression: explored memory stays\nbounded as the tree "
-                  "grows exponentially", fontsize=10)
+    axA.set_title(
+        "Finite-state compression: explored memory stays\nbounded as the tree "
+        "grows exponentially",
+        fontsize=10,
+    )
     axA.grid(True, which="both", ls=":", alpha=0.5)
     axA.legend(loc="center right", fontsize=9)
 
@@ -72,8 +86,11 @@ def main() -> None:
     axB.grid(True, ls=":", alpha=0.5)
     axB.legend(loc="upper left", fontsize=8)
 
-    fig.suptitle(f"Infinite-depth regime (arity {BRANCHING}, horizon {HORIZON}): "
-                 "regret-optimal HOO compresses to a finite explored tree", fontsize=11)
+    fig.suptitle(
+        f"Infinite-depth regime (arity {BRANCHING}, horizon {HORIZON}): "
+        "regret-optimal HOO compresses to a finite explored tree",
+        fontsize=11,
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     out = Path(__file__).parent / "images" / "tree_infinite_depth.png"
     out.parent.mkdir(exist_ok=True)

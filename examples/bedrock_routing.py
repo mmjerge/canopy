@@ -23,17 +23,26 @@ from canopy.bandits.bedrock import BedrockClient, measure_quality_matrix
 
 # 16 prompts -> a branching=4, depth=2 prefix tree (n_leaves = 16).
 PROMPTS = [
-    "What is 2+2?", "Capital of France?", "Translate 'hello' to Spanish.",
-    "Define entropy in one sentence.", "Reverse the string 'banana'.",
-    "Is 17 prime?", "Summarize photosynthesis in one line.", "What year did WWII end?",
-    "Compute 12 * 13.", "Antonym of 'fast'?", "Name a primary color.",
-    "What is the boiling point of water in C?", "Spell 'necessary'.",
-    "Round 3.14159 to 2 decimals.", "What is the plural of 'mouse'?",
+    "What is 2+2?",
+    "Capital of France?",
+    "Translate 'hello' to Spanish.",
+    "Define entropy in one sentence.",
+    "Reverse the string 'banana'.",
+    "Is 17 prime?",
+    "Summarize photosynthesis in one line.",
+    "What year did WWII end?",
+    "Compute 12 * 13.",
+    "Antonym of 'fast'?",
+    "Name a primary color.",
+    "What is the boiling point of water in C?",
+    "Spell 'necessary'.",
+    "Round 3.14159 to 2 decimals.",
+    "What is the plural of 'mouse'?",
     "Convert 1 km to meters.",
 ]
 MODEL_IDS = [
     "anthropic.claude-3-5-sonnet-20240620-v1:0",  # big / costly
-    "amazon.nova-micro-v1:0",                      # cheap / fast
+    "amazon.nova-micro-v1:0",  # cheap / fast
 ]
 
 
@@ -54,12 +63,24 @@ def main() -> None:
     print("measured per-model avg quality:", quality.mean(axis=1).round(3))
     print("measured per-model avg cost/query (USD):", costs.round(5))
 
-    env = PrefixTreeRouting(branching=4, depth=2, quality=quality, costs=costs,
-                            lam=50.0, noise_std=0.05, rng=np.random.default_rng(0))
-    router = run_router(env, horizon=4000, rng=np.random.default_rng(1),
-                        strategy="hierarchical", resolution=1)
-    big = run_router(PrefixTreeRouting(4, 2, quality, costs, lam=50.0, rng=np.random.default_rng(0)),
-                     4000, np.random.default_rng(1), strategy="all_largest")
+    env = PrefixTreeRouting(
+        branching=4,
+        depth=2,
+        quality=quality,
+        costs=costs,
+        lam=50.0,
+        noise_std=0.05,
+        rng=np.random.default_rng(0),
+    )
+    router = run_router(
+        env, horizon=4000, rng=np.random.default_rng(1), strategy="hierarchical", resolution=1
+    )
+    big = run_router(
+        PrefixTreeRouting(4, 2, quality, costs, lam=50.0, rng=np.random.default_rng(0)),
+        4000,
+        np.random.default_rng(1),
+        strategy="all_largest",
+    )
     print(f"router:      regret={router.final_regret:.2f}  cost/query={router.total_cost/4000:.5f}")
     print(f"always-big:  regret={big.final_regret:.2f}  cost/query={big.total_cost/4000:.5f}")
 

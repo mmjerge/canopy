@@ -30,21 +30,29 @@ def main() -> None:
 
     def mk(seed):
         return TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=sigma, noise_std=0.1, probe_cost=probe_cost,
+            branching,
+            depth,
+            sigma=sigma,
+            noise_std=0.1,
+            probe_cost=probe_cost,
             rng=np.random.default_rng(seed),
         )
 
     hier, se, uni = [], [], []
     for seed in range(n_seeds):
         e = mk(seed)
-        hier.append(HierarchicalTopK(budget=budget, spread=spread, beam_width=20).run(e, k).evaluate(e, k))
+        hier.append(
+            HierarchicalTopK(budget=budget, spread=spread, beam_width=20).run(e, k).evaluate(e, k)
+        )
         e = mk(seed)
         se.append(SuccessiveEliminationTopK(budget=budget).run(e, k).evaluate(e, k))
         e = mk(seed)
         uni.append(UniformTopK(budget=budget).run(e, k).evaluate(e, k))
 
-    print(f"tree: {branching**depth} leaves, top-{k}, budget={budget:.0f} cost, "
-          f"probe/leaf={probe_cost}, {n_seeds} seeds")
+    print(
+        f"tree: {branching**depth} leaves, top-{k}, budget={budget:.0f} cost, "
+        f"probe/leaf={probe_cost}, {n_seeds} seeds"
+    )
     print(f"  HierarchicalTopK         mean recall = {np.mean(hier):.2f}")
     print(f"  SuccessiveEliminationTopK mean recall = {np.mean(se):.2f}  (strong baseline)")
     print(f"  UniformTopK              mean recall = {np.mean(uni):.2f}  (weak baseline)")

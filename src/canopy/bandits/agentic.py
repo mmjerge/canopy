@@ -2,7 +2,8 @@
 
 This lifts the reasoning-tree result (``canopy.bandits.reasoning``) from a static tree of leaf
 rewards to a *real sequential decision process* with state and dynamics -- the agentic /
-multi-step setting. It is the same multi-fidelity structure as :class:`canopy.bandits.tree.TreeBandit`:
+multi-step setting. It is the same multi-fidelity structure as
+:class:`canopy.bandits.tree.TreeBandit`:
 
 * an **expensive, unbiased** signal -- the terminal reward of a committed trajectory -- and
 * a **cheap, biased** signal -- a short random rollout from a partial trajectory (the value
@@ -85,8 +86,12 @@ class GridWorld:
         (``+ size``) to reach it, so random shooting must be efficient to succeed.
         """
         dist = 2 * (size - 1)
-        return cls(size=size, goal=(size - 1, size - 1), start=(0, 0),
-                   horizon=horizon if horizon is not None else dist + size)
+        return cls(
+            size=size,
+            goal=(size - 1, size - 1),
+            start=(0, 0),
+            horizon=horizon if horizon is not None else dist + size,
+        )
 
 
 @dataclass
@@ -125,7 +130,9 @@ def best_of_n_plan(env: GridWorld, n: int, rng: np.random.Generator) -> PlanResu
 
 
 def rollout_policy_plan(
-    env: GridWorld, n_rollouts: int, rng: np.random.Generator,
+    env: GridWorld,
+    n_rollouts: int,
+    rng: np.random.Generator,
 ) -> PlanResult:
     """Edge-following planner: at each state, pick the action with the best rollout value.
 
@@ -165,7 +172,9 @@ def rollout_policy_plan(
 
 
 def compare_matched_budget(
-    env: GridWorld, n_rollouts: int, seed: int,
+    env: GridWorld,
+    n_rollouts: int,
+    seed: int,
 ) -> dict[str, PlanResult]:
     """Run both planners at a matched step budget; best-of-N gets value-guided's step count.
 
@@ -180,7 +189,9 @@ def compare_matched_budget(
 
 
 def success_rates(
-    env: GridWorld, n_rollouts: int, seeds: int = 100,
+    env: GridWorld,
+    n_rollouts: int,
+    seeds: int = 100,
 ) -> dict[str, float]:
     """Goal-reaching rate of each planner over ``seeds`` instances at a matched budget."""
     vg_ok = bo_ok = 0

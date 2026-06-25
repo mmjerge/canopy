@@ -44,8 +44,12 @@ def main() -> None:
     ap.add_argument("--n-problems", type=int, default=20)
     ap.add_argument("--region", default="us-east-1")
     ap.add_argument("--model", default=MODEL_ID)
-    ap.add_argument("--bo-n", type=int, default=0,
-                    help="best-of-N sample count; 0 = auto-match value-guided's call budget")
+    ap.add_argument(
+        "--bo-n",
+        type=int,
+        default=0,
+        help="best-of-N sample count; 0 = auto-match value-guided's call budget",
+    )
     ap.add_argument("--branching", type=int, default=3)
     ap.add_argument("--n-steps", type=int, default=4)
     ap.add_argument("--rollouts", type=int, default=2)
@@ -54,14 +58,17 @@ def main() -> None:
 
     try:
         from canopy.bandits.bedrock import BedrockClient
+
         client = BedrockClient(region=args.region, max_tokens=512)
         problems = load_gsm8k(args.n_problems)
     except Exception as e:  # noqa: BLE001 -- missing extras / creds / model access
-        print(f"Could not initialize the real-LLM experiment: {e}\n"
-              "Install extras and configure AWS:\n"
-              "  uv sync --extra llm --extra bench\n"
-              "  (AWS creds with Bedrock invoke permission + model access)\n"
-              "The search logic itself is exercised by tests/test_reasoning_llm.py (mock LLM).")
+        print(
+            f"Could not initialize the real-LLM experiment: {e}\n"
+            "Install extras and configure AWS:\n"
+            "  uv sync --extra llm --extra bench\n"
+            "  (AWS creds with Bedrock invoke permission + model access)\n"
+            "The search logic itself is exercised by tests/test_reasoning_llm.py (mock LLM)."
+        )
         return
 
     def generate(prompt: str, max_tokens: int, seed: int) -> str:
@@ -77,28 +84,42 @@ def main() -> None:
     bo_tokens = vg_tokens = 0
     for i, (q, gold) in enumerate(problems):
         bo = best_of_n(q, gold, generate, n=bo_n)
-        vg = value_guided_search(q, gold, generate, branching=args.branching,
-                                 n_steps=args.n_steps, rollouts=args.rollouts,
-                                 final_rollouts=args.final_rollouts)
+        vg = value_guided_search(
+            q,
+            gold,
+            generate,
+            branching=args.branching,
+            n_steps=args.n_steps,
+            rollouts=args.rollouts,
+            final_rollouts=args.final_rollouts,
+        )
         bo_correct += bo.correct
         vg_correct += vg.correct
         bo_calls += bo.budget.calls
         vg_calls += vg.budget.calls
         bo_tokens += bo.budget.tokens
         vg_tokens += vg.budget.tokens
-        print(f"[{i+1}/{len(problems)}] gold={gold:>6}  best-of-N={bo.answer} ({bo.correct})  "
-              f"value-guided={vg.answer} ({vg.correct})")
+        print(
+            f"[{i+1}/{len(problems)}] gold={gold:>6}  best-of-N={bo.answer} ({bo.correct})  "
+            f"value-guided={vg.answer} ({vg.correct})"
+        )
 
     n = len(problems)
     print(f"\nGSM8K ({n} problems), matched budget ~{bo_n} calls, model {args.model}")
-    print(f"  best-of-N      : acc {bo_correct/n:.2f}   avg calls {bo_calls/n:.1f}   "
-          f"avg tokens {bo_tokens/n:.0f}")
-    print(f"  value-guided   : acc {vg_correct/n:.2f}   avg calls {vg_calls/n:.1f}   "
-          f"avg tokens {vg_tokens/n:.0f}")
+    print(
+        f"  best-of-N      : acc {bo_correct/n:.2f}   avg calls {bo_calls/n:.1f}   "
+        f"avg tokens {bo_tokens/n:.0f}"
+    )
+    print(
+        f"  value-guided   : acc {vg_correct/n:.2f}   avg calls {vg_calls/n:.1f}   "
+        f"avg tokens {vg_tokens/n:.0f}"
+    )
     diff = (vg_correct - bo_correct) / n
     se = ((bo_correct / n) * (1 - bo_correct / n) / n) ** 0.5 + 1e-12
-    print(f"  acc diff (vg - bo): {diff:+.3f}  (~{abs(diff) / se:.1f} SE; "
-          f"n={n} is small, treat |diff| < ~{2 * se:.2f} as within noise)")
+    print(
+        f"  acc diff (vg - bo): {diff:+.3f}  (~{abs(diff) / se:.1f} SE; "
+        f"n={n} is small, treat |diff| < ~{2 * se:.2f} as within noise)"
+    )
 
 
 if __name__ == "__main__":

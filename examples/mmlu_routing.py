@@ -19,9 +19,14 @@ from canopy.bandits import PrefixTreeRouting, run_router
 from canopy.bandits.bedrock import DEFAULT_PRICING, BedrockClient
 
 SUBJECTS = [
-    "elementary_mathematics", "abstract_algebra", "high_school_biology",
-    "college_computer_science", "world_religions", "moral_scenarios",
-    "global_facts", "high_school_government_and_politics",
+    "elementary_mathematics",
+    "abstract_algebra",
+    "high_school_biology",
+    "college_computer_science",
+    "world_religions",
+    "moral_scenarios",
+    "global_facts",
+    "high_school_government_and_politics",
 ]
 Q_PER = 4  # questions per subject -> 8 subjects * 4 = 32 leaves (branching=2, depth=5)
 MODELS = [
@@ -85,10 +90,14 @@ def main() -> None:
                         print(f"   {model} call failed: {type(e).__name__}: {str(e)[:120]}")
             costs[mi] /= n
             total_fails += fails
-            print(f"  {model:36s} acc={quality[mi].mean():.2f}  cost/q={costs[mi]:.6f}  fails={fails}")
+            print(
+                f"  {model:36s} acc={quality[mi].mean():.2f}  cost/q={costs[mi]:.6f}  fails={fails}"
+            )
         if total_fails > 0.2 * n * len(MODELS):
-            print(f"\nABORTING: {total_fails} calls failed (likely expired creds or model "
-                  "access). Not caching. Refresh creds and re-run.")
+            print(
+                f"\nABORTING: {total_fails} calls failed (likely expired creds or model "
+                "access). Not caching. Refresh creds and re-run."
+            )
             return
         np.savez(cache, quality=quality, costs=costs, models=np.array(MODELS))
         print(f"saved results to {cache.name}")
@@ -97,20 +106,27 @@ def main() -> None:
     print("\nper-subject accuracy (rows=models):")
     print("  " + "  ".join(f"{s[:10]:>10s}" for s in SUBJECTS))
     for mi, model in enumerate(MODELS):
-        per_sub = [quality[mi, s * Q_PER:(s + 1) * Q_PER].mean() for s in range(len(SUBJECTS))]
+        per_sub = [quality[mi, s * Q_PER : (s + 1) * Q_PER].mean() for s in range(len(SUBJECTS))]
         print(f"  {model.split('.')[-1][:14]:14s} " + " ".join(f"{v:10.2f}" for v in per_sub))
 
     rel_costs = costs / costs.max()
     print("\nrouting (branching=2, depth=5, region=subject at resolution 3):")
     results = {}
-    for strat, kw in [("hierarchical", {"resolution": 3}), ("best_single", {}),
-                      ("all_largest", {}), ("oracle", {})]:
-        env = PrefixTreeRouting(2, 5, quality, rel_costs, lam=0.3, noise_std=0.05,
-                                rng=np.random.default_rng(0))
+    for strat, kw in [
+        ("hierarchical", {"resolution": 3}),
+        ("best_single", {}),
+        ("all_largest", {}),
+        ("oracle", {}),
+    ]:
+        env = PrefixTreeRouting(
+            2, 5, quality, rel_costs, lam=0.3, noise_std=0.05, rng=np.random.default_rng(0)
+        )
         r = run_router(env, 6000, np.random.default_rng(1), strategy=strat, **kw)
         results[r.label] = r
-        print(f"  {r.label:18s} regret={r.final_regret:7.1f}  "
-              f"avg_quality={r.avg_quality:.3f}  rel_cost/q={r.total_cost/6000:.3f}")
+        print(
+            f"  {r.label:18s} regret={r.final_regret:7.1f}  "
+            f"avg_quality={r.avg_quality:.3f}  rel_cost/q={r.total_cost/6000:.3f}"
+        )
 
     _plot(results, quality)
 
@@ -118,23 +134,42 @@ def main() -> None:
 def _plot(results: dict, quality: np.ndarray) -> None:
     import matplotlib.pyplot as plt
 
-    colors = {"hierarchical(r=3)": "#d62728", "best_single": "#1f77b4",
-              "all_largest": "#ff7f0e", "oracle": "#2ca02c"}
+    colors = {
+        "hierarchical(r=3)": "#d62728",
+        "best_single": "#1f77b4",
+        "all_largest": "#ff7f0e",
+        "oracle": "#2ca02c",
+    }
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 5.2))
     for label, r in results.items():
-        axA.plot(np.arange(1, len(r.cum_regret) + 1), r.cum_regret,
-                 color=colors.get(label), lw=2, label=label)
+        axA.plot(
+            np.arange(1, len(r.cum_regret) + 1),
+            r.cum_regret,
+            color=colors.get(label),
+            lw=2,
+            label=label,
+        )
     axA.set_xlabel("prompts seen")
     axA.set_ylabel("cumulative routing regret")
     axA.set_title("Real MMLU routing: hierarchical beats fixed policies", fontsize=10)
     axA.grid(True, ls=":", alpha=0.5)
     axA.legend(loc="upper left", fontsize=8)
     for label, r in results.items():
-        axB.scatter([r.total_cost / len(r.cum_regret)], [r.avg_quality],
-                    color=colors.get(label), s=110,
-                    marker="*" if label == "oracle" else "o", zorder=3)
-        axB.annotate(label, (r.total_cost / len(r.cum_regret), r.avg_quality),
-                     fontsize=8, xytext=(5, 4), textcoords="offset points")
+        axB.scatter(
+            [r.total_cost / len(r.cum_regret)],
+            [r.avg_quality],
+            color=colors.get(label),
+            s=110,
+            marker="*" if label == "oracle" else "o",
+            zorder=3,
+        )
+        axB.annotate(
+            label,
+            (r.total_cost / len(r.cum_regret), r.avg_quality),
+            fontsize=8,
+            xytext=(5, 4),
+            textcoords="offset points",
+        )
     axB.set_xlabel("relative cost per query")
     axB.set_ylabel("average quality (accuracy)")
     axB.set_title("Cost vs quality across diverse Bedrock models", fontsize=10)

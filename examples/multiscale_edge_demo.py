@@ -34,12 +34,17 @@ LEVELS = [2, 3, 4]
 
 def family(seed: int):
     rng = np.random.default_rng(seed)
-    m = np.clip(hierarchical_gaussian_leaf_means(
-        BRANCHING, DEPTH, geometric_sigma(0.04, 0.6), root_value=0.4, rng=rng), 0, 1)
+    m = np.clip(
+        hierarchical_gaussian_leaf_means(
+            BRANCHING, DEPTH, geometric_sigma(0.04, 0.6), root_value=0.4, rng=rng
+        ),
+        0,
+        1,
+    )
     regions = []
     for _ in range(2):  # wide blocks
         s = int(rng.integers(0, N - 64))
-        m[s:s + 64] = 0.8
+        m[s : s + 64] = 0.8
         regions.append((s, s + 64))
     for _ in range(2):  # narrow spikes
         s = int(rng.integers(0, N))
@@ -57,16 +62,19 @@ def main() -> None:
     single = {lvl: [] for lvl in LEVELS}
     for seed in range(N_SEEDS):
         lm, regions = family(seed)
-        env = TreeBandit(BRANCHING, DEPTH, leaf_means=lm, noise_std=NOISE,
-                         rng=np.random.default_rng(20 + seed))
-        em = multiscale_edge_map(env, np.random.default_rng(20 + seed), levels=LEVELS,
-                                 n_samples_per_cell=40)
+        env = TreeBandit(
+            BRANCHING, DEPTH, leaf_means=lm, noise_std=NOISE, rng=np.random.default_rng(20 + seed)
+        )
+        em = multiscale_edge_map(
+            env, np.random.default_rng(20 + seed), levels=LEVELS, n_samples_per_cell=40
+        )
         ranges = em.finest_ranges()
         ms_recall.append(covers(ranges, regions))
         ms_loc.append(np.mean([e - s for s, e in ranges]) if ranges else N)
         for lvl in LEVELS:
-            det = detect_violations(env, lvl, lambda _l: 0.06, np.random.default_rng(20 + seed),
-                                    n_samples_per_cell=40).detected
+            det = detect_violations(
+                env, lvl, lambda _l: 0.06, np.random.default_rng(20 + seed), n_samples_per_cell=40
+            ).detected
             cs = BRANCHING ** (DEPTH - lvl)
             single[lvl].append(covers([(c * cs, (c + 1) * cs) for c in det], regions))
 
@@ -75,10 +83,14 @@ def main() -> None:
     for lvl in LEVELS:
         cs = BRANCHING ** (DEPTH - lvl)
         print(f"{'single level ' + str(lvl):18s} {np.mean(single[lvl]):7.2f}   (cell size {cs})")
-    print(f"{'multiscale':18s} {np.mean(ms_recall):7.2f}   (avg flagged cell {np.mean(ms_loc):.0f})")
-    print("\nmultiscale catches violations at every scale and localizes each at its own scale;\n"
-          "any single level trades recall (coarse misses narrow / fine misses wide) for "
-          "localization.")
+    print(
+        f"{'multiscale':18s} {np.mean(ms_recall):7.2f}   (avg flagged cell {np.mean(ms_loc):.0f})"
+    )
+    print(
+        "\nmultiscale catches violations at every scale and localizes each at its own scale;\n"
+        "any single level trades recall (coarse misses narrow / fine misses wide) for "
+        "localization."
+    )
 
     try:
         import matplotlib.pyplot as plt

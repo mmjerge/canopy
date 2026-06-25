@@ -42,10 +42,10 @@ BENCH: list[tuple[str, str]] = [
     ("What is 15% of 240? Number only.", "36"),
 ]
 MODELS = [
-    "amazon.nova-pro-v1:0",        # strong, costly
-    "amazon.nova-lite-v1:0",       # mid
+    "amazon.nova-pro-v1:0",  # strong, costly
+    "amazon.nova-lite-v1:0",  # mid
     "mistral.mistral-small-2402-v1:0",
-    "amazon.nova-micro-v1:0",      # cheap
+    "amazon.nova-micro-v1:0",  # cheap
 ]
 
 
@@ -83,14 +83,21 @@ def main() -> None:
     # rescale costs to relative units so the cost term is comparable to accuracy gaps
     rel_costs = costs / costs.max()
     results = {}
-    for strat, kw in [("hierarchical", {"resolution": 1}), ("best_single", {}),
-                      ("all_largest", {}), ("oracle", {})]:
-        env = PrefixTreeRouting(4, 2, quality, rel_costs, lam=0.3, noise_std=0.05,
-                                rng=np.random.default_rng(0))
+    for strat, kw in [
+        ("hierarchical", {"resolution": 1}),
+        ("best_single", {}),
+        ("all_largest", {}),
+        ("oracle", {}),
+    ]:
+        env = PrefixTreeRouting(
+            4, 2, quality, rel_costs, lam=0.3, noise_std=0.05, rng=np.random.default_rng(0)
+        )
         r = run_router(env, 4000, np.random.default_rng(1), strategy=strat, **kw)
         results[r.label] = r
-        print(f"  {r.label:18s} regret={r.final_regret:7.1f}  "
-              f"avg_quality={r.avg_quality:.3f}  rel_cost/q={r.total_cost/4000:.3f}")
+        print(
+            f"  {r.label:18s} regret={r.final_regret:7.1f}  "
+            f"avg_quality={r.avg_quality:.3f}  rel_cost/q={r.total_cost/4000:.3f}"
+        )
 
 
 if __name__ == "__main__":

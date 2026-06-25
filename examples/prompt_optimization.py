@@ -23,9 +23,14 @@ from canopy.bandits import PrefixTreeRouting, run_router
 from canopy.bandits.bedrock import BedrockClient
 
 SUBJECTS = [
-    "elementary_mathematics", "abstract_algebra", "high_school_biology",
-    "college_computer_science", "world_religions", "moral_scenarios",
-    "global_facts", "high_school_government_and_politics",
+    "elementary_mathematics",
+    "abstract_algebra",
+    "high_school_biology",
+    "college_computer_science",
+    "world_religions",
+    "moral_scenarios",
+    "global_facts",
+    "high_school_government_and_politics",
 ]
 Q_PER = 4
 MODEL = "amazon.nova-lite-v1:0"  # cheap, capable
@@ -94,7 +99,7 @@ def main() -> None:
                     fails += 1
                     if fails <= 1:
                         print(f"  call failed: {type(e).__name__}: {str(e)[:110]}")
-            print(f"  trim {lvl}: acc={quality[lvl].mean():.2f}  avg_in_tokens={in_tokens[lvl].mean():.1f}")
+            print(f"  trim {lvl}: acc={quality[lvl].mean():.2f} in_tok={in_tokens[lvl].mean():.1f}")
         if fails > 0.2 * N_TRIM * n:
             print(f"ABORTING: {fails} failed calls (creds/access). Not caching.")
             return
@@ -110,30 +115,47 @@ def main() -> None:
     print("\nprompt-trim policy (arms = trim levels, regions = subjects):")
     results = {}
     for strat, kw in [("hierarchical", {"resolution": 3}), ("best_single", {}), ("oracle", {})]:
-        env = PrefixTreeRouting(2, 5, quality, rel_costs, lam=0.3, noise_std=0.05,
-                                rng=np.random.default_rng(0))
+        env = PrefixTreeRouting(
+            2, 5, quality, rel_costs, lam=0.3, noise_std=0.05, rng=np.random.default_rng(0)
+        )
         r = run_router(env, 6000, np.random.default_rng(1), strategy=strat, **kw)
         tok = r.total_cost / 6000 * costs.max()
         results[r.label] = (r.avg_quality, tok, r.final_regret)
         label = {"best_single": "best-fixed-trim"}.get(r.label, r.label)
-        print(f"  {label:18s} regret={r.final_regret:7.1f}  accuracy={r.avg_quality:.3f}  avg_tokens={tok:.1f}")
-    print(f"  {'always-verbose(0)':18s} accuracy={quality[0].mean():.3f}  avg_tokens={costs[0]:.1f}")
+        print(
+            f"  {label:18s} regret={r.final_regret:7.1f} acc={r.avg_quality:.3f} tokens={tok:.1f}"
+        )
+    print(
+        f"  {'always-verbose(0)':18s} accuracy={quality[0].mean():.3f}  avg_tokens={costs[0]:.1f}"
+    )
 
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(7.6, 5))
     ax.plot(costs, quality.mean(axis=1), "o-", color="#1f77b4", label="fixed trim level")
     for lvl in range(N_TRIM):
-        ax.annotate(f"trim {lvl}", (costs[lvl], quality[lvl].mean()),
-                    fontsize=8, xytext=(5, 4), textcoords="offset points")
+        ax.annotate(
+            f"trim {lvl}",
+            (costs[lvl], quality[lvl].mean()),
+            fontsize=8,
+            xytext=(5, 4),
+            textcoords="offset points",
+        )
     aq, at, _ = results["hierarchical(r=3)"]
-    ax.scatter([at], [aq], color="#d62728", s=130, marker="*", zorder=3, label="adaptive per-subject")
+    ax.scatter(
+        [at], [aq], color="#d62728", s=130, marker="*", zorder=3, label="adaptive per-subject"
+    )
     oq, ot, _ = results["oracle"]
-    ax.scatter([ot], [oq], color="#2ca02c", s=110, marker="D", zorder=3, label="oracle (per-question)")
+    ax.scatter(
+        [ot], [oq], color="#2ca02c", s=110, marker="D", zorder=3, label="oracle (per-question)"
+    )
     ax.set_xlabel("average input tokens (cost)")
     ax.set_ylabel("accuracy")
-    ax.set_title(f"Prompt trimming on {MODEL}: adaptive per-subject trim\n"
-                 "beats any fixed trim on the accuracy/token tradeoff", fontsize=10)
+    ax.set_title(
+        f"Prompt trimming on {MODEL}: adaptive per-subject trim\n"
+        "beats any fixed trim on the accuracy/token tradeoff",
+        fontsize=10,
+    )
     ax.grid(True, ls=":", alpha=0.5)
     ax.legend(loc="lower right", fontsize=9)
     fig.tight_layout()

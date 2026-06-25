@@ -36,8 +36,14 @@ def main() -> None:
     stationary = {p: [] for p in POLICIES}
     for b in budgets:
         for p in POLICIES:
-            s = [run_cache(PrefixCacheEnv(rng=np.random.default_rng(seed)).generate_stream(HORIZON),
-                           b, policy=p).avg_savings for seed in range(N_SEEDS)]
+            s = [
+                run_cache(
+                    PrefixCacheEnv(rng=np.random.default_rng(seed)).generate_stream(HORIZON),
+                    b,
+                    policy=p,
+                ).avg_savings
+                for seed in range(N_SEEDS)
+            ]
             stationary[p].append(np.mean(s))
     print("\nstationary savings/prompt:")
     for p in POLICIES:
@@ -48,8 +54,9 @@ def main() -> None:
     curves = {p: [] for p in POLICIES}
     for p in POLICIES:
         for seed in range(N_SEEDS):
-            stream = PrefixCacheEnv(shift_at=HORIZON // 2,
-                                    rng=np.random.default_rng(seed)).generate_stream(HORIZON)
+            stream = PrefixCacheEnv(
+                shift_at=HORIZON // 2, rng=np.random.default_rng(seed)
+            ).generate_stream(HORIZON)
             curves[p].append(run_cache(stream, shift_budget, policy=p).savings_curve)
     curve_mean = {p: np.mean(curves[p], axis=0) for p in POLICIES}
     print(f"\nnon-stationary (shift at {HORIZON // 2}, B={shift_budget}) final savings:")
@@ -58,8 +65,14 @@ def main() -> None:
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 5.2))
     for p in POLICIES:
-        axA.plot(budgets, stationary[p], "o-", color=COLORS[p], lw=2,
-                 label=p + (" (optimal)" if p == "offline" else ""))
+        axA.plot(
+            budgets,
+            stationary[p],
+            "o-",
+            color=COLORS[p],
+            lw=2,
+            label=p + (" (optimal)" if p == "offline" else ""),
+        )
     axA.set_xlabel("cache memory budget (nodes)")
     axA.set_ylabel("tokens reused per prompt")
     axA.set_title("Stationary: savings vs memory budget", fontsize=10)
@@ -77,8 +90,9 @@ def main() -> None:
     axB.grid(True, ls=":", alpha=0.5)
     axB.legend(loc="lower left", fontsize=8)
 
-    fig.suptitle("Prefix-cache management as online tree selection under a memory budget",
-                 fontsize=11)
+    fig.suptitle(
+        "Prefix-cache management as online tree selection under a memory budget", fontsize=11
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     out = Path(__file__).parent / "images" / "tree_prefix_cache.png"
     out.parent.mkdir(exist_ok=True)

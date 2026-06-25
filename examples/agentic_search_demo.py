@@ -38,14 +38,16 @@ def _draw_grid(ax, env: GridWorld, traj, title: str, color: str) -> None:
     ax.set_aspect("equal")
     for r in range(env.size):
         for c in range(env.size):
-            ax.add_patch(plt.Rectangle((c - 0.5, r - 0.5), 1, 1, fill=False,
-                                       edgecolor="0.85", lw=0.5))
+            ax.add_patch(
+                plt.Rectangle((c - 0.5, r - 0.5), 1, 1, fill=False, edgecolor="0.85", lw=0.5)
+            )
     xs = [s[1] for s in traj]
     ys = [s[0] for s in traj]
     ax.plot(xs, ys, "-o", color=color, ms=3, lw=1.5, alpha=0.8)
     ax.plot(env.start[1], env.start[0], "s", color="black", ms=9, label="start")
-    ax.plot(env.goal[1], env.goal[0], "*", color="gold", ms=18,
-            markeredgecolor="black", label="goal")
+    ax.plot(
+        env.goal[1], env.goal[0], "*", color="gold", ms=18, markeredgecolor="black", label="goal"
+    )
     ax.invert_yaxis()
 
 
@@ -60,11 +62,21 @@ def main() -> None:
     ax = axes[0]
     _draw_grid(ax, env, bo.trajectory, "", "tab:orange")
     ax.plot([], [], "-o", color="tab:orange", ms=3, label=f"best-of-N (reached={bo.reached_goal})")
-    ax.plot([s[1] for s in vg.trajectory], [s[0] for s in vg.trajectory],
-            "-o", color="tab:blue", ms=3, lw=1.5, alpha=0.8,
-            label=f"rollout-guided (reached={vg.reached_goal})")
-    ax.set_title(f"Trajectories on a {env.size}x{env.size} grid "
-                 f"(horizon {env.horizon}, ~{vg.steps} steps each)", fontsize=10)
+    ax.plot(
+        [s[1] for s in vg.trajectory],
+        [s[0] for s in vg.trajectory],
+        "-o",
+        color="tab:blue",
+        ms=3,
+        lw=1.5,
+        alpha=0.8,
+        label=f"rollout-guided (reached={vg.reached_goal})",
+    )
+    ax.set_title(
+        f"Trajectories on a {env.size}x{env.size} grid "
+        f"(horizon {env.horizon}, ~{vg.steps} steps each)",
+        fontsize=10,
+    )
     ax.legend(loc="upper left", fontsize=7, framealpha=0.9)
 
     # --- panel 2: success vs horizon (grid size) at matched budget ---
@@ -101,22 +113,28 @@ def main() -> None:
     ax.set_xscale("log")
     ax.set_xlabel("compute budget (simulator steps, log scale)")
     ax.set_ylabel("goal-reaching rate")
-    ax.set_title(f"Success vs. budget ({env_b.size}x{env_b.size}, horizon {env_b.horizon})",
-                 fontsize=10)
+    ax.set_title(
+        f"Success vs. budget ({env_b.size}x{env_b.size}, horizon {env_b.horizon})", fontsize=10
+    )
     ax.set_ylim(-0.03, 1.03)
     ax.grid(alpha=0.3)
     ax.legend(fontsize=8)
 
-    fig.suptitle("Long-horizon agentic search: where to spend test-time compute "
-                 "(equal budget, the only difference is allocation)", fontsize=12)
+    fig.suptitle(
+        "Long-horizon agentic search: where to spend test-time compute "
+        "(equal budget, the only difference is allocation)",
+        fontsize=12,
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     out = Path(__file__).parent / "images" / "tree_agentic_search.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=130)
     print(f"wrote {out}")
-    print(f"  panel1: best-of-N reached={bo.reached_goal}, rollout-guided reached={vg.reached_goal}")
+    print(
+        f"  panel1: best-of-N reached={bo.reached_goal}, rollout-guided reached={vg.reached_goal}"
+    )
     print(f"  panel2 horizons={horizons}")
-    print(f"          vg={[round(x,2) for x in vg_rate]}  bo={[round(x,2) for x in bo_rate]}")
+    print(f"          vg={[round(x, 2) for x in vg_rate]}  bo={[round(x, 2) for x in bo_rate]}")
 
 
 if __name__ == "__main__":

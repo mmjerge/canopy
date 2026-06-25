@@ -46,8 +46,9 @@ class BedrockClient:
         max_tokens: Default generation cap.
     """
 
-    def __init__(self, region: str = "us-east-1", role_arn: str | None = None,
-                 max_tokens: int = 512) -> None:
+    def __init__(
+        self, region: str = "us-east-1", role_arn: str | None = None, max_tokens: int = 512
+    ) -> None:
         import boto3  # lazy: only needed when actually calling Bedrock
 
         self.max_tokens = max_tokens
@@ -63,8 +64,13 @@ class BedrockClient:
             session = boto3.Session()
         self.runtime = session.client("bedrock-runtime", region_name=region)
 
-    def generate(self, model_id: str, prompt: str, temperature: float | None = None,
-                 max_tokens: int | None = None) -> tuple[str, int, int]:
+    def generate(
+        self,
+        model_id: str,
+        prompt: str,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> tuple[str, int, int]:
         """Return ``(response_text, input_tokens, output_tokens)`` for one prompt.
 
         ``temperature`` (if given) enables diverse sampling across calls -- needed for

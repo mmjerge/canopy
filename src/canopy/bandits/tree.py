@@ -85,7 +85,9 @@ class TreeBandit:
         self.branching = branching
         self.depth = depth
         self.noise_std = float(noise_std)
-        self.probe_noise_std = float(probe_noise_std) if probe_noise_std is not None else float(noise_std)
+        self.probe_noise_std = (
+            float(probe_noise_std) if probe_noise_std is not None else float(noise_std)
+        )
         self.leaf_cost = float(leaf_cost)
         self.probe_cost = float(probe_cost)
         self.rng = rng or np.random.default_rng()
@@ -128,9 +130,16 @@ class TreeBandit:
         leaf_means = hierarchical_gaussian_leaf_means(
             branching, depth, sigma, root_value=root_value, rng=rng
         )
-        return cls(branching, depth, leaf_means=leaf_means, noise_std=noise_std,
-                   leaf_cost=leaf_cost, probe_cost=probe_cost,
-                   probe_noise_std=probe_noise_std, rng=rng)
+        return cls(
+            branching,
+            depth,
+            leaf_means=leaf_means,
+            noise_std=noise_std,
+            leaf_cost=leaf_cost,
+            probe_cost=probe_cost,
+            probe_noise_std=probe_noise_std,
+            rng=rng,
+        )
 
     @classmethod
     def from_adversarial_spikes(
@@ -151,9 +160,16 @@ class TreeBandit:
         """
         rng = rng or np.random.default_rng()
         leaf_means = adversarial_spike_leaf_means(branching, depth, n_spikes, rng=rng)
-        return cls(branching, depth, leaf_means=leaf_means, noise_std=noise_std,
-                   leaf_cost=leaf_cost, probe_cost=probe_cost,
-                   probe_noise_std=probe_noise_std, rng=rng)
+        return cls(
+            branching,
+            depth,
+            leaf_means=leaf_means,
+            noise_std=noise_std,
+            leaf_cost=leaf_cost,
+            probe_cost=probe_cost,
+            probe_noise_std=probe_noise_std,
+            rng=rng,
+        )
 
     @classmethod
     def from_piecewise_smooth(
@@ -177,9 +193,16 @@ class TreeBandit:
         leaf_means = piecewise_smooth_leaf_means(
             branching, depth, n_jumps, jump_width=jump_width, rng=rng
         )
-        return cls(branching, depth, leaf_means=leaf_means, noise_std=noise_std,
-                   leaf_cost=leaf_cost, probe_cost=probe_cost,
-                   probe_noise_std=probe_noise_std, rng=rng)
+        return cls(
+            branching,
+            depth,
+            leaf_means=leaf_means,
+            noise_std=noise_std,
+            leaf_cost=leaf_cost,
+            probe_cost=probe_cost,
+            probe_noise_std=probe_noise_std,
+            rng=rng,
+        )
 
     # --- structure helpers -------------------------------------------------
 

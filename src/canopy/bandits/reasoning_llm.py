@@ -5,7 +5,8 @@ claim from ``canopy.bandits.reasoning``: that value-guided (edge-following) test
 finds correct answers at lower compute than best-of-N. It is deliberately decoupled from any
 specific model: every method takes a ``generate`` callable
 ``(prompt, max_tokens, seed) -> text``, so it runs against a mock LLM in tests and against a
-real model (e.g. ``canopy.bandits.bedrock.BedrockClient``) in ``examples/gsm8k_reasoning_search.py``.
+real model (e.g. ``canopy.bandits.bedrock.BedrockClient``) in
+``examples/gsm8k_reasoning_search.py``.
 
 Two strategies, compared at an equal budget of generation calls:
 
@@ -79,15 +80,21 @@ def is_correct(text: str, gold: str) -> bool:
 
 # --- prompts -------------------------------------------------------------------
 
-_SOLVE = ("Solve the problem step by step and end with '#### <answer>'.\n\n"
-          "Problem: {q}\n\nSolution:")
-_CONTINUE = ("Solve the problem step by step and end with '#### <answer>'.\n\n"
-             "Problem: {q}\n\nSolution so far:\n{prefix}\nNext step:")
-_ROLLOUT = ("Solve the problem step by step and end with '#### <answer>'.\n\n"
-            "Problem: {q}\n\nSolution so far:\n{prefix}\nFinish the solution:")
+_SOLVE = (
+    "Solve the problem step by step and end with '#### <answer>'.\n\n" "Problem: {q}\n\nSolution:"
+)
+_CONTINUE = (
+    "Solve the problem step by step and end with '#### <answer>'.\n\n"
+    "Problem: {q}\n\nSolution so far:\n{prefix}\nNext step:"
+)
+_ROLLOUT = (
+    "Solve the problem step by step and end with '#### <answer>'.\n\n"
+    "Problem: {q}\n\nSolution so far:\n{prefix}\nFinish the solution:"
+)
 
 
 # --- strategies ----------------------------------------------------------------
+
 
 @dataclass
 class SearchResult:
@@ -97,7 +104,11 @@ class SearchResult:
 
 
 def best_of_n(
-    question: str, gold: str, generate: GenerateFn, n: int, max_tokens: int = 512,
+    question: str,
+    gold: str,
+    generate: GenerateFn,
+    n: int,
+    max_tokens: int = 512,
 ) -> SearchResult:
     """Sample ``n`` full solutions and return the majority-vote answer (self-consistency)."""
     budget = Budget()
@@ -113,9 +124,15 @@ def best_of_n(
 
 
 def value_guided_search(
-    question: str, gold: str, generate: GenerateFn,
-    branching: int = 3, n_steps: int = 4, rollouts: int = 2, max_tokens: int = 512,
-    value_fn: Callable[[list[str]], float] | None = None, final_rollouts: int = 1,
+    question: str,
+    gold: str,
+    generate: GenerateFn,
+    branching: int = 3,
+    n_steps: int = 4,
+    rollouts: int = 2,
+    max_tokens: int = 512,
+    value_fn: Callable[[list[str]], float] | None = None,
+    final_rollouts: int = 1,
 ) -> SearchResult:
     """Beam/tree search over reasoning steps with cheap-rollout value (multi-fidelity probe).
 
@@ -137,13 +154,17 @@ def value_guided_search(
     for step in range(n_steps):
         best_step, best_val = None, -1.0
         for c in range(branching):
-            cand = generate(_CONTINUE.format(q=question, prefix=prefix), max_tokens // 2,
-                            1000 * step + c)
+            cand = generate(
+                _CONTINUE.format(q=question, prefix=prefix), max_tokens // 2, 1000 * step + c
+            )
             budget.charge(cand)
             roll_texts: list[str] = []
             for r in range(rollouts):
-                roll = generate(_ROLLOUT.format(q=question, prefix=prefix + "\n" + cand),
-                                max_tokens, 50_000 + 1000 * (step * branching + c) + r)
+                roll = generate(
+                    _ROLLOUT.format(q=question, prefix=prefix + "\n" + cand),
+                    max_tokens,
+                    50_000 + 1000 * (step * branching + c) + r,
+                )
                 budget.charge(roll)
                 roll_texts.append(roll)
             val = value_fn(roll_texts)
