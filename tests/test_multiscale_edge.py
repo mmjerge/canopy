@@ -13,12 +13,15 @@ N = B**D
 
 def mixed_width_family(seed: int):
     rng = np.random.default_rng(seed)
-    m = np.clip(hierarchical_gaussian_leaf_means(
-        B, D, geometric_sigma(0.04, 0.6), root_value=0.4, rng=rng), 0, 1)
+    m = np.clip(
+        hierarchical_gaussian_leaf_means(B, D, geometric_sigma(0.04, 0.6), root_value=0.4, rng=rng),
+        0,
+        1,
+    )
     regions = []
     for _ in range(2):
         s = int(rng.integers(0, N - 64))
-        m[s:s + 64] = 0.8
+        m[s : s + 64] = 0.8
         regions.append((s, s + 64))
     for _ in range(2):
         s = int(rng.integers(0, N))
@@ -55,14 +58,16 @@ def test_multiscale_recall_beats_single_level_on_mixed_widths():
     for seed in range(15):
         lm, regions = mixed_width_family(seed)
         env = TreeBandit(B, D, leaf_means=lm, noise_std=0.08, rng=np.random.default_rng(20 + seed))
-        em = multiscale_edge_map(env, np.random.default_rng(20 + seed), levels=[2, 3, 4],
-                                 n_samples_per_cell=40)
+        em = multiscale_edge_map(
+            env, np.random.default_rng(20 + seed), levels=[2, 3, 4], n_samples_per_cell=40
+        )
         ms.append(covers(em.finest_ranges(), regions))
-        det = detect_violations(env, 4, lambda _l: 0.06, np.random.default_rng(20 + seed),
-                                n_samples_per_cell=40).detected
+        det = detect_violations(
+            env, 4, lambda _l: 0.06, np.random.default_rng(20 + seed), n_samples_per_cell=40
+        ).detected
         cs = B ** (D - 4)
         single4.append(covers([(c * cs, (c + 1) * cs) for c in det], regions))
-    assert np.mean(ms) >= 0.95            # catches violations at every scale
+    assert np.mean(ms) >= 0.95  # catches violations at every scale
     assert np.mean(ms) > np.mean(single4)  # and beats a single fine level
 
 

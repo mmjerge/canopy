@@ -29,9 +29,9 @@ storage/cost budget** — one framework, one regret/storage theory, three real a
 
 | application | mapping | result | code |
 | --- | --- | --- | --- |
-| **Routing** | leaf = prompt, arm = model, region = subject | real MMLU + 6 Bedrock models: 0.84 quality vs 0.69 best-fixed-model, beats always-largest at ~½ cost | `routing.py`, `examples/mmlu_routing.py` |
-| **Prefix caching** | cache = ancestor-closed subtree, storage = memory | matches LFU/offline on stationary; beats both LFU and best static cache under popularity shift | `prefix_cache.py`, `examples/prefix_cache_demo.py` |
-| **Prompt trimming** | arm = trim level, region = subject | real MMLU + nova-lite: adaptive per-subject trim beats best fixed trim on accuracy (0.77 vs 0.75) and tokens (97 vs 101); verbose prefix hurt | `examples/prompt_optimization.py` |
+| **Routing** | leaf = prompt, arm = model, region = subject | real MMLU + 6 Bedrock models: 0.84 quality vs 0.69 best-fixed-model, beats always-largest at ~½ cost | `routing.py`, `examples/llm_routing/mmlu_routing.py` |
+| **Prefix caching** | cache = ancestor-closed subtree, storage = memory | matches LFU/offline on stationary; beats both LFU and best static cache under popularity shift | `prefix_cache.py`, `examples/llm_routing/prefix_cache_demo.py` |
+| **Prompt trimming** | arm = trim level, region = subject | real MMLU + nova-lite: adaptive per-subject trim beats best fixed trim on accuracy (0.77 vs 0.75) and tokens (97 vs 101); verbose prefix hurt | `examples/llm_routing/prompt_optimization.py` |
 
 Caching is the cleanest: the prefix tree is the *actual* cache data structure, so there is
 no tree-alignment assumption (unlike routing/trimming, where the tree must align with

@@ -51,5 +51,7 @@ def test_from_moments_matches_direct():
     direct = mgf_bound(x, 64, 0.1, delta=0.05, lambdas=lambdas)
     se = np.array([np.sum(np.exp(lam * x)) for lam in lambdas])
     se2 = np.array([np.sum(np.exp(2 * lam * x)) for lam in lambdas])
-    from_mom = mgf_bound_from_moments(len(x), float(x.mean()), se, se2, lambdas, 64, 0.1, delta=0.05)
+    from_mom = mgf_bound_from_moments(
+        len(x), float(x.mean()), se, se2, lambdas, 64, 0.1, delta=0.05
+    )
     assert abs(direct - from_mom) < 1e-6

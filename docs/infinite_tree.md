@@ -54,7 +54,7 @@ explored tree has Õ(n^{d/(d+2)}) nodes — **finite and independent of the (inf
 So the infinite tree is compressed to a finite explored state whose size is set by d, not
 by depth.
 
-Empirically (`examples/infinite_depth_demo.py`, arity 3, horizon 15k, memory-bounded HOO):
+Empirically (`examples/tree_bandits/infinite_depth_demo.py`, arity 3, horizon 15k, memory-bounded HOO):
 
 | depth | total nodes in tree | explored memory | final regret |
 | --- | --- | --- | --- |

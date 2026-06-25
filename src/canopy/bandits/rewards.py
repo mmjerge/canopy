@@ -151,8 +151,11 @@ def piecewise_smooth_leaf_means(
     rng = rng or np.random.default_rng()
     n_leaves = branching**depth
     base = hierarchical_gaussian_leaf_means(
-        branching, depth, geometric_sigma(base_sigma, base_decay),
-        root_value=root_value, rng=rng,
+        branching,
+        depth,
+        geometric_sigma(base_sigma, base_decay),
+        root_value=root_value,
+        rng=rng,
     )
     means = base.copy()
     if jump_width is None:

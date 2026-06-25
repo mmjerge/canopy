@@ -45,8 +45,9 @@ class MockLLM:
         made = list(self._bits(prefix))
         if "Next step:" in prompt:
             return f"step -> {'1' if rng.random() < self.p_step else '0'}"
-        bits = made + ["1" if rng.random() < self.p_step else "0"
-                       for _ in range(self.k - len(made))]
+        bits = made + [
+            "1" if rng.random() < self.p_step else "0" for _ in range(self.k - len(made))
+        ]
         return f"reasoning... #### {sum(b == '1' for b in bits)}"
 
 
@@ -66,8 +67,7 @@ def test_methods_run_and_count_budget():
     gen = MockLLM(k=4)
     r = best_of_n("q", gold="4", generate=gen, n=5)
     assert r.budget.calls == 5 and r.answer is not None
-    r2 = value_guided_search("q", gold="4", generate=MockLLM(4),
-                             branching=2, n_steps=4, rollouts=2)
+    r2 = value_guided_search("q", gold="4", generate=MockLLM(4), branching=2, n_steps=4, rollouts=2)
     # branching*(1 + rollouts) per step, plus one final rollout
     assert r2.budget.calls == 4 * (2 * (1 + 2)) + 1
 
@@ -80,8 +80,7 @@ def test_value_guided_beats_best_of_n_given_informative_value():
         return float(np.mean([float(s) for s in scores if s is not None])) if scores else 0.0
 
     k = 5
-    vg = _success(value_guided_search, k, branching=3, n_steps=k, rollouts=3,
-                  value_fn=graded_value)
+    vg = _success(value_guided_search, k, branching=3, n_steps=k, rollouts=3, value_fn=graded_value)
     bo = _success(best_of_n, k, n=3 * k * 4 + 1)  # comparable call budget
     assert vg > 0.3
     assert vg > bo + 0.2

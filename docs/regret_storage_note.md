@@ -2,7 +2,7 @@
 
 Follow-up to the question: *when do we refine a parent's estimate vs. expand it into
 children, and is there a regret-optimal way to do it?* Chart:
-`examples/tree_regret_storage.png`.
+`examples/images/tree_regret_storage.png`.
 
 ## Setup
 

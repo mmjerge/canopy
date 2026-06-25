@@ -54,8 +54,10 @@ class PrefixCacheEnv:
         self.shift_at = shift_at
         self.rng = rng or np.random.default_rng()
         # distinct template prefixes
-        self.templates = [tuple(int(t) for t in self.rng.integers(0, vocab, prefix_len))
-                          for _ in range(n_templates)]
+        self.templates = [
+            tuple(int(t) for t in self.rng.integers(0, vocab, prefix_len))
+            for _ in range(n_templates)
+        ]
         ranks = np.arange(1, n_templates + 1)
         w = 1.0 / ranks**zipf_s
         self.base_pop = w / w.sum()
@@ -197,5 +199,6 @@ def run_cache(
                 else:
                     break
 
-    return CacheResult(avg_savings=float(savings[-window:].mean()),
-                       savings_curve=savings, label=policy)
+    return CacheResult(
+        avg_savings=float(savings[-window:].mean()), savings_curve=savings, label=policy
+    )

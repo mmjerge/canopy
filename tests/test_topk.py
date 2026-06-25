@@ -17,8 +17,13 @@ from canopy.bandits import (
 def _easy_env(noise_std=0.05, seed=0):
     # Top-2 leaves (indices 6, 7) clearly separated from the rest.
     leaf_means = np.array([0.05, 0.15, 0.25, 0.35, 0.45, 0.50, 0.90, 0.95])
-    return TreeBandit(branching=2, depth=3, leaf_means=leaf_means,
-                      noise_std=noise_std, rng=np.random.default_rng(seed))
+    return TreeBandit(
+        branching=2,
+        depth=3,
+        leaf_means=leaf_means,
+        noise_std=noise_std,
+        rng=np.random.default_rng(seed),
+    )
 
 
 def test_uniform_returns_k_leaves_and_respects_budget():
@@ -30,9 +35,7 @@ def test_uniform_returns_k_leaves_and_respects_budget():
 
 def test_uniform_respects_budget_below_n_leaves():
     # 1024 leaves but only 200 cost (leaf_cost=1): must not exceed budget, most unseen.
-    env = TreeBandit.from_hierarchical_gaussian(
-        branching=4, depth=5, rng=np.random.default_rng(0)
-    )
+    env = TreeBandit.from_hierarchical_gaussian(branching=4, depth=5, rng=np.random.default_rng(0))
     res = UniformTopK(budget=200).run(env, k=5)
     assert res.cost <= 200
     unseen = sum(1 for v in res.estimates.values() if v == float("-inf"))
@@ -88,15 +91,25 @@ def test_hierarchical_beats_uniform_in_tight_budget_regime():
     hier, uni = [], []
     for seed in range(n_seeds):
         env_h = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=sigma, noise_std=0.1, probe_cost=0.05,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=sigma,
+            noise_std=0.1,
+            probe_cost=0.05,
+            rng=np.random.default_rng(seed),
         )
         hier.append(
-            HierarchicalTopK(budget=budget, spread=spread, beam_width=20).run(env_h, k).evaluate(env_h, k)
+            HierarchicalTopK(budget=budget, spread=spread, beam_width=20)
+            .run(env_h, k)
+            .evaluate(env_h, k)
         )
         env_u = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=sigma, noise_std=0.1, probe_cost=0.05,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=sigma,
+            noise_std=0.1,
+            probe_cost=0.05,
+            rng=np.random.default_rng(seed),
         )
         uni.append(UniformTopK(budget=budget).run(env_u, k).evaluate(env_u, k))
     assert np.mean(hier) > np.mean(uni)

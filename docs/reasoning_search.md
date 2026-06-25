@@ -52,8 +52,8 @@ does edge-targeted search beat best-of-N at equal compute? The synthetic result 
 controlled bridge to that experiment.
 
 ```bash
-uv run python examples/reasoning_search_demo.py
-uv run --extra plot python examples/reasoning_search_demo.py   # success-vs-budget + K-scaling
+uv run python examples/reasoning/reasoning_search_demo.py
+uv run --extra plot python examples/reasoning/reasoning_search_demo.py   # success-vs-budget + K-scaling
 ```
 
 ## From synthetic to a real benchmark (no synthetic shortcuts)
@@ -71,12 +71,12 @@ is verified now with a mock LLM (`tests/test_reasoning_llm.py`): given an inform
 (graded/PRM-style) value, value-guided beats best-of-N at matched budget, confirming the
 machinery; whether self-consistency is informative enough on real traces is the open question.
 
-`examples/gsm8k_reasoning_search.py` runs it on real GSM8K via the Bedrock client used by the
+`examples/reasoning/gsm8k_reasoning_search.py` runs it on real GSM8K via the Bedrock client used by the
 routing experiments (matched generation-call budget, accuracy reported):
 
 ```bash
 uv sync --extra llm --extra bench
-uv run --extra llm --extra bench python examples/gsm8k_reasoning_search.py --n-problems 20
+uv run --extra llm --extra bench python examples/reasoning/gsm8k_reasoning_search.py --n-problems 20
 # (needs AWS creds + Bedrock model access; makes real paid calls)
 ```
 

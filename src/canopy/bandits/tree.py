@@ -22,13 +22,17 @@ leaf indices, which makes subtree values and ground-truth top-k cheap to compute
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
 
-if TYPE_CHECKING:
-    from canopy.bandits.rewards import SigmaSchedule
+from canopy.bandits.rewards import (
+    SigmaSchedule,
+    adversarial_spike_leaf_means,
+    geometric_sigma,
+    hierarchical_gaussian_leaf_means,
+    piecewise_smooth_leaf_means,
+)
 
 
 @dataclass(frozen=True)
@@ -81,7 +85,9 @@ class TreeBandit:
         self.branching = branching
         self.depth = depth
         self.noise_std = float(noise_std)
-        self.probe_noise_std = float(probe_noise_std) if probe_noise_std is not None else float(noise_std)
+        self.probe_noise_std = (
+            float(probe_noise_std) if probe_noise_std is not None else float(noise_std)
+        )
         self.leaf_cost = float(leaf_cost)
         self.probe_cost = float(probe_cost)
         self.rng = rng or np.random.default_rng()
@@ -119,16 +125,21 @@ class TreeBandit:
         :mod:`canopy.bandits.rewards`. If ``sigma`` is omitted, a geometric schedule
         ``0.4 * 0.5 ** level`` is used.
         """
-        from canopy.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
-
         rng = rng or np.random.default_rng()
         sigma = sigma or geometric_sigma()
         leaf_means = hierarchical_gaussian_leaf_means(
             branching, depth, sigma, root_value=root_value, rng=rng
         )
-        return cls(branching, depth, leaf_means=leaf_means, noise_std=noise_std,
-                   leaf_cost=leaf_cost, probe_cost=probe_cost,
-                   probe_noise_std=probe_noise_std, rng=rng)
+        return cls(
+            branching,
+            depth,
+            leaf_means=leaf_means,
+            noise_std=noise_std,
+            leaf_cost=leaf_cost,
+            probe_cost=probe_cost,
+            probe_noise_std=probe_noise_std,
+            rng=rng,
+        )
 
     @classmethod
     def from_adversarial_spikes(
@@ -147,13 +158,18 @@ class TreeBandit:
         Subtree averages are nearly uninformative here -- the adversarial case where
         trusting the tree structure can hurt. See :mod:`canopy.bandits.rewards`.
         """
-        from canopy.bandits.rewards import adversarial_spike_leaf_means
-
         rng = rng or np.random.default_rng()
         leaf_means = adversarial_spike_leaf_means(branching, depth, n_spikes, rng=rng)
-        return cls(branching, depth, leaf_means=leaf_means, noise_std=noise_std,
-                   leaf_cost=leaf_cost, probe_cost=probe_cost,
-                   probe_noise_std=probe_noise_std, rng=rng)
+        return cls(
+            branching,
+            depth,
+            leaf_means=leaf_means,
+            noise_std=noise_std,
+            leaf_cost=leaf_cost,
+            probe_cost=probe_cost,
+            probe_noise_std=probe_noise_std,
+            rng=rng,
+        )
 
     @classmethod
     def from_piecewise_smooth(
@@ -173,15 +189,20 @@ class TreeBandit:
         Smooth base + ``n_jumps`` localized cliffs (the piecewise-Lipschitz / dispersion
         setting). See :mod:`canopy.bandits.rewards`.
         """
-        from canopy.bandits.rewards import piecewise_smooth_leaf_means
-
         rng = rng or np.random.default_rng()
         leaf_means = piecewise_smooth_leaf_means(
             branching, depth, n_jumps, jump_width=jump_width, rng=rng
         )
-        return cls(branching, depth, leaf_means=leaf_means, noise_std=noise_std,
-                   leaf_cost=leaf_cost, probe_cost=probe_cost,
-                   probe_noise_std=probe_noise_std, rng=rng)
+        return cls(
+            branching,
+            depth,
+            leaf_means=leaf_means,
+            noise_std=noise_std,
+            leaf_cost=leaf_cost,
+            probe_cost=probe_cost,
+            probe_noise_std=probe_noise_std,
+            rng=rng,
+        )
 
     # --- structure helpers -------------------------------------------------
 

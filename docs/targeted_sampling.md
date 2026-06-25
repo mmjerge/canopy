@@ -43,8 +43,8 @@ once the budget is large enough to sample everything, and trusting smoothness ne
 hidden optimum.
 
 ```bash
-uv run python examples/targeted_sampling_demo.py
-uv run --extra plot python examples/targeted_sampling_demo.py   # sample-efficiency curve -> PNG
+uv run python examples/tree_bandits/targeted_sampling_demo.py
+uv run --extra plot python examples/tree_bandits/targeted_sampling_demo.py   # sample-efficiency curve -> PNG
 ```
 
 ## Honest notes / next
@@ -86,8 +86,8 @@ The multiscale map catches violations at every scale (a single level always miss
 wrong-scale ones) and localizes each at its own scale, with no assumed Lipschitz constant.
 
 ```bash
-uv run python examples/multiscale_edge_demo.py
-uv run --extra plot python examples/multiscale_edge_demo.py   # function + edge-score panels -> PNG
+uv run python examples/tree_bandits/multiscale_edge_demo.py
+uv run --extra plot python examples/tree_bandits/multiscale_edge_demo.py   # function + edge-score panels -> PNG
 ```
 
 **Honest caveat (efficiency).** The robust version probes every cell at every chosen level,

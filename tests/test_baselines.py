@@ -16,8 +16,13 @@ from canopy.bandits import (
 
 def _easy_env(noise_std=0.05, seed=0):
     leaf_means = np.array([0.05, 0.15, 0.25, 0.35, 0.45, 0.50, 0.90, 0.95])
-    return TreeBandit(branching=2, depth=3, leaf_means=leaf_means,
-                      noise_std=noise_std, rng=np.random.default_rng(seed))
+    return TreeBandit(
+        branching=2,
+        depth=3,
+        leaf_means=leaf_means,
+        noise_std=noise_std,
+        rng=np.random.default_rng(seed),
+    )
 
 
 def test_returns_k_leaves_and_respects_budget():
@@ -61,15 +66,25 @@ def test_tree_beats_strong_baseline_when_probes_are_cheap():
     hier, se = [], []
     for seed in range(n_seeds):
         env_h = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=sigma, noise_std=0.1, probe_cost=0.05,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=sigma,
+            noise_std=0.1,
+            probe_cost=0.05,
+            rng=np.random.default_rng(seed),
         )
         hier.append(
-            HierarchicalTopK(budget=budget, spread=spread, beam_width=20).run(env_h, k).evaluate(env_h, k)
+            HierarchicalTopK(budget=budget, spread=spread, beam_width=20)
+            .run(env_h, k)
+            .evaluate(env_h, k)
         )
         env_s = TreeBandit.from_hierarchical_gaussian(
-            branching, depth, sigma=sigma, noise_std=0.1, probe_cost=0.05,
-            rng=np.random.default_rng(seed)
+            branching,
+            depth,
+            sigma=sigma,
+            noise_std=0.1,
+            probe_cost=0.05,
+            rng=np.random.default_rng(seed),
         )
         se.append(SuccessiveEliminationTopK(budget=budget).run(env_s, k).evaluate(env_s, k))
     assert np.mean(hier) > np.mean(se) + 0.1  # large, robust margin in this regime

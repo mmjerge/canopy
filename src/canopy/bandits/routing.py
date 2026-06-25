@@ -24,6 +24,8 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from canopy.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
+
 
 @dataclass
 class RouteResult:
@@ -107,20 +109,22 @@ def make_routing_scenario(
 
     Returns ``(quality, costs)`` with ``quality`` of shape (2, branching**depth).
     """
-    from canopy.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
-
     n_leaves = branching**depth
     big = np.clip(
-        0.85 + hierarchical_gaussian_leaf_means(
+        0.85
+        + hierarchical_gaussian_leaf_means(
             branching, depth, geometric_sigma(0.06, 0.6), root_value=0.0, rng=rng
         ),
-        0.0, 1.0,
+        0.0,
+        1.0,
     )
     small = np.full(n_leaves, 0.35) + 0.05 * rng.standard_normal(n_leaves)
     region_size = n_leaves // (branching**2)
     starts = rng.choice(branching**2, size=n_strong_regions, replace=False)
     for s in starts:
-        small[s * region_size : (s + 1) * region_size] = 0.92 + 0.03 * rng.standard_normal(region_size)
+        small[s * region_size : (s + 1) * region_size] = 0.92 + 0.03 * rng.standard_normal(
+            region_size
+        )
     small = np.clip(small, 0.0, 1.0)
     quality = np.vstack([big, small])
     costs = np.array([1.0, 0.1])

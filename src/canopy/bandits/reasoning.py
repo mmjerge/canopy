@@ -53,7 +53,7 @@ def reasoning_tree_rewards(
     hits = np.zeros(n)
     for k, d in enumerate(decision_levels):
         token_d = (leaves // branching ** (depth - 1 - d)) % branching
-        hits += (token_d == correct[k])
+        hits += token_d == correct[k]
     return hits / n_decisions, decision_levels.astype(np.int64)
 
 
@@ -123,14 +123,16 @@ def success_rate(
     """
     out = []
     for s in range(seeds):
-        reward, _ = reasoning_tree_rewards(depth, n_decisions, branching,
-                                           rng=np.random.default_rng(s))
+        reward, _ = reasoning_tree_rewards(
+            depth, n_decisions, branching, rng=np.random.default_rng(s)
+        )
         if method == "best_of_n":
             ok, _ = best_of_n(reward, budget, sigma, np.random.default_rng(10_000 + s))
         elif method == "value_guided":
             m = max(1, budget // (depth * branching))
-            ok, _ = value_guided_search(reward, depth, m, sigma,
-                                        np.random.default_rng(20_000 + s), branching)
+            ok, _ = value_guided_search(
+                reward, depth, m, sigma, np.random.default_rng(20_000 + s), branching
+            )
         else:
             raise ValueError("method must be 'best_of_n' or 'value_guided'")
         out.append(ok)

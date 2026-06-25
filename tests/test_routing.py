@@ -9,8 +9,9 @@ from canopy.bandits import PrefixTreeRouting, make_routing_scenario, run_router
 
 def _env(seed, lam=0.3):
     q, costs = make_routing_scenario(4, 5, np.random.default_rng(seed))
-    return PrefixTreeRouting(4, 5, q, costs, lam=lam, noise_std=0.1,
-                             rng=np.random.default_rng(100 + seed))
+    return PrefixTreeRouting(
+        4, 5, q, costs, lam=lam, noise_std=0.1, rng=np.random.default_rng(100 + seed)
+    )
 
 
 def test_oracle_has_zero_regret():
@@ -33,8 +34,9 @@ def test_router_beats_fixed_policies_and_saves_cost():
     router_cost, big_cost = [], []
     for seed in range(5):
         env = _env(seed)
-        r = run_router(env, horizon, np.random.default_rng(200 + seed),
-                       strategy="hierarchical", resolution=2)
+        r = run_router(
+            env, horizon, np.random.default_rng(200 + seed), strategy="hierarchical", resolution=2
+        )
         env2 = _env(seed)
         bs = run_router(env2, horizon, np.random.default_rng(200 + seed), strategy="best_single")
         env3 = _env(seed)
