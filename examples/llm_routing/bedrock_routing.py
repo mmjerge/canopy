@@ -8,7 +8,7 @@ Setup:
   1. cd terraform && terraform apply         # provisions the Bedrock invoke role + logging
   2. Enable model access in the Bedrock console for the models you list below.
   3. uv sync --extra llm
-  4. uv run --extra llm python examples/bedrock_routing.py
+  4. uv run --extra llm python examples/llm_routing/bedrock_routing.py
 
 This script is NOT run in CI (it needs credentials and incurs Bedrock cost). The grader
 here is a trivial stand-in; swap in a real correctness check for your task.

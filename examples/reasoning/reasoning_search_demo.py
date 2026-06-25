@@ -15,8 +15,8 @@ an exponential separation in the number of decision steps. (This is a search /
 compute-allocation result: it needs a reachable correct trace and an informative value
 signal, and does not add capability the model lacks.)
 
-Run with:  uv run python examples/reasoning_search_demo.py
-           uv run --extra plot python examples/reasoning_search_demo.py   # + PNG
+Run with:  uv run python examples/reasoning/reasoning_search_demo.py
+           uv run --extra plot python examples/reasoning/reasoning_search_demo.py   # + PNG
 """
 
 from __future__ import annotations
@@ -113,7 +113,7 @@ def main() -> None:
         fontsize=12,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    out = Path(__file__).parent / "images" / "tree_reasoning_search.png"
+    out = Path(__file__).parent.parent / "images" / "tree_reasoning_search.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

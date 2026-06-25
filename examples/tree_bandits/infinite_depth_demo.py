@@ -7,7 +7,7 @@ any fixed-resolution method) blows up exponentially. This is the discrete stand-
 the continuous infinite-depth tree: under local smoothness, the explored state is finite
 and governed by the near-optimality dimension, not the (infinite) tree size.
 
-Run with:  uv run --extra plot python examples/infinite_depth_demo.py
+Run with:  uv run --extra plot python examples/tree_bandits/infinite_depth_demo.py
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def main() -> None:
         fontsize=11,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "tree_infinite_depth.png"
+    out = Path(__file__).parent.parent / "images" / "tree_infinite_depth.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

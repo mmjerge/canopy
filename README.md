@@ -40,15 +40,15 @@ learns which model to use for which prefix region, generalizing across prompts t
 prefix.
 *Result:* real MMLU + 6 Bedrock models — **0.84 quality vs 0.69** best-fixed-model, matching
 always-largest at ~**½ the cost** (≈12× lower regret than the best fixed policy).
-*Code:* `canopy.bandits.routing`; `examples/mmlu_routing.py`, `examples/llm_routing_demo.py`,
-`examples/bedrock_routing.py`. *Docs:* `docs/llm_routing.md`.
+*Code:* `canopy.bandits.routing`; `examples/llm_routing/mmlu_routing.py`, `examples/llm_routing/llm_routing_demo.py`,
+`examples/llm_routing/bedrock_routing.py`. *Docs:* `docs/llm_routing.md`.
 
 ### 2. Prefix caching
 *Mapping:* cache = ancestor-closed subtree of the token trie, storage = memory budget; caching
 a prefix saves recompute for every prompt through it.
 *Result:* matches LFU and the hindsight optimum on a stationary stream, and **beats both LFU
 and the best static cache under a popularity shift** (it tracks the drift).
-*Code:* `canopy.bandits.prefix_cache`; `examples/prefix_cache_demo.py`.
+*Code:* `canopy.bandits.prefix_cache`; `examples/llm_routing/prefix_cache_demo.py`.
 *Note:* the cleanest of the three — the prefix tree **is** the actual cache data structure, so
 there is no tree-alignment assumption.
 
@@ -56,15 +56,15 @@ there is no tree-alignment assumption.
 *Mapping:* arm = trim level, region = subject. Adaptive per-subject prompt trimming.
 *Result:* real MMLU + nova-lite — adaptive trim beats the best fixed trim on accuracy
 (**0.77 vs 0.75**) and tokens (**97 vs 101**).
-*Code:* `examples/prompt_optimization.py`.
+*Code:* `examples/llm_routing/prompt_optimization.py`.
 *Honest caveat:* this run used an 8-token output cap that penalized verbose prompts; it is the
 weakest of the three and needs a re-run at a larger output budget to be airtight.
 
 ```bash
-uv run --extra plot python examples/llm_routing_demo.py      # routing (synthetic + chart)
-uv run --extra plot python examples/prefix_cache_demo.py     # caching under drift
-uv run --extra plot --extra llm python examples/mmlu_routing.py        # real Bedrock routing
-uv run --extra plot --extra llm python examples/prompt_optimization.py # real Bedrock trimming
+uv run --extra plot python examples/llm_routing/llm_routing_demo.py      # routing (synthetic + chart)
+uv run --extra plot python examples/llm_routing/prefix_cache_demo.py     # caching under drift
+uv run --extra plot --extra llm python examples/llm_routing/mmlu_routing.py        # real Bedrock routing
+uv run --extra plot --extra llm python examples/llm_routing/prompt_optimization.py # real Bedrock trimming
 ```
 
 ## What's in the repo
@@ -108,9 +108,9 @@ violation count `K`, beats the structure-blind `H_blind`, saturates back to it a
 proliferate (`docs/fixed_budget_bound.md`).
 
 ```bash
-uv run --extra plot python examples/benchmark.py            # fidelity + budget sweep
-uv run --extra plot python examples/regret_storage_demo.py  # regret vs memory
-uv run --extra plot python examples/violation_regret_demo.py
+uv run --extra plot python examples/tree_bandits/benchmark.py            # fidelity + budget sweep
+uv run --extra plot python examples/tree_bandits/regret_storage_demo.py  # regret vs memory
+uv run --extra plot python examples/tree_bandits/violation_regret_demo.py
 ```
 
 ## Docs

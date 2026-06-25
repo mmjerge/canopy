@@ -9,7 +9,7 @@ hierarchical policy learn -- per subject -- the most aggressive trim that still 
 correctly. Reward = correctness, cost = input tokens; utility = accuracy - lam * tokens.
 
 Run (in a shell with AWS creds):
-    uv run --extra bench --extra plot python examples/prompt_optimization.py
+    uv run --extra bench --extra plot python examples/llm_routing/prompt_optimization.py
 Caches per-(trim, question) results to prompt_optimization.npz.
 """
 
@@ -159,7 +159,7 @@ def main() -> None:
     ax.grid(True, ls=":", alpha=0.5)
     ax.legend(loc="lower right", fontsize=9)
     fig.tight_layout()
-    out = Path(__file__).parent / "images" / "prompt_optimization.png"
+    out = Path(__file__).parent.parent / "images" / "prompt_optimization.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

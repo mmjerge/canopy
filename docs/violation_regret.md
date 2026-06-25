@@ -55,8 +55,8 @@ cells, where it falls back to leaf-level certification. (Detection undercounts a
 because spikes collide in cells — that is correct: distinct anomalous *cells* < spikes.)
 
 ```bash
-uv run python examples/violation_regret_demo.py
-uv run --extra plot python examples/violation_regret_demo.py   # detection + dominance panels -> PNG
+uv run python examples/tree_bandits/violation_regret_demo.py
+uv run --extra plot python examples/tree_bandits/violation_regret_demo.py   # detection + dominance panels -> PNG
 ```
 
 ## For the writeup

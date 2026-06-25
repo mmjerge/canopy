@@ -8,13 +8,14 @@ strategies on a GSM8K subset at a matched budget of generation calls, and report
 Requires the optional extras and AWS access:
     uv sync --extra llm --extra bench
     # plus AWS credentials with Bedrock invoke permission and model access enabled
-    uv run --extra llm --extra bench python examples/gsm8k_reasoning_search.py
+    uv run --extra llm --extra bench python examples/reasoning/gsm8k_reasoning_search.py
 
 It makes real, paid model calls; start with a small ``--n-problems`` and small budgets.
 
-Honest read: the synthetic result (``examples/reasoning_search_demo.py``) shows value-guided
-wins *when the value signal is informative at the decision steps*. Whether the cheap rollout
-value (self-consistency, the default) is informative enough on real GSM8K traces is exactly
+Honest read: the synthetic result (``examples/reasoning/reasoning_search_demo.py``) shows
+value-guided wins *when the value signal is informative at the decision steps*. Whether the
+cheap rollout value (self-consistency, the default) is informative enough on real GSM8K traces
+is exactly
 what this measures -- a negative result is also informative (it would say the value signal,
 not the search, is the bottleneck).
 """

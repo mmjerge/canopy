@@ -12,7 +12,7 @@ Two panels:
   (B) cost-vs-quality Pareto: the router lands near the oracle (high quality, low cost),
       while always-big is high-quality but high-cost.
 
-Run with:  uv run --extra plot python examples/llm_routing_demo.py
+Run with:  uv run --extra plot python examples/llm_routing/llm_routing_demo.py
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def main() -> None:
         fontsize=11,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "tree_llm_routing.png"
+    out = Path(__file__).parent.parent / "images" / "tree_llm_routing.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

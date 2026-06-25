@@ -12,7 +12,7 @@ Panels:
   (B) the true within-subtree spread by region (left low, right high) -- the heterogeneous
       smoothness the adaptive method exploits.
 
-Run with:  uv run --extra plot python examples/local_lipschitz_demo.py
+Run with:  uv run --extra plot python examples/tree_bandits/local_lipschitz_demo.py
 """
 
 from __future__ import annotations
@@ -110,7 +110,7 @@ def main() -> None:
 
     fig.suptitle("Tighter Lipschitz localization: adapt the constant per subtree", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "tree_local_lipschitz.png"
+    out = Path(__file__).parent.parent / "images" / "tree_local_lipschitz.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

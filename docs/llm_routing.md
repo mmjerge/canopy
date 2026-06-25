@@ -35,7 +35,7 @@ structure, too fine learns slowly, a middle resolution generalizes. A routing-re
 follows from the per-region bandit regret plus the `O(K·depth)` jump term for the boundary
 regions.
 
-## Experiment (simulation; `examples/llm_routing_demo.py`)
+## Experiment (simulation; `examples/llm_routing/llm_routing_demo.py`)
 
 Big model (quality ~0.85 everywhere, cost 1.0) vs. cheap model (strong only in a few
 prefix regions with sharp boundaries, cost 0.1). 1024 prompts, 20k-prompt stream, 8 seeds,
@@ -59,7 +59,7 @@ same resolution tradeoff as the rest of the framework.
 The algorithms are unchanged for real data — only `quality` changes. `canopy.bandits.bedrock`
 provides this bridge: `BedrockClient` calls models via the Bedrock Converse API (uniform
 across providers) and `measure_quality_matrix(prompts, model_ids, client, grade)` returns
-the `(quality, costs)` arrays a `PrefixTreeRouting` consumes. See `examples/bedrock_routing.py`
+the `(quality, costs)` arrays a `PrefixTreeRouting` consumes. See `examples/llm_routing/bedrock_routing.py`
 and the Terraform Bedrock stack (`terraform/bedrock.tf`) for the IAM/logging setup.
 
 1. **Drop in a router benchmark** (e.g. measured per-model correctness on a prompt set):

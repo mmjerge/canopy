@@ -1,10 +1,10 @@
 """Long-horizon agentic search: rollout-guided planning vs. best-of-N (random shooting).
 
-Lifts the reasoning-tree separation (``examples/reasoning_search_demo.py``) into a real
+Lifts the reasoning-tree separation (``examples/reasoning/reasoning_search_demo.py``) into a real
 sequential decision process -- grid navigation with a genuine horizon. Both planners spend the
 same number of simulator steps; the only difference is *how* they allocate that compute.
 
-    uv run --extra plot python examples/agentic_search_demo.py
+    uv run --extra plot python examples/reasoning/agentic_search_demo.py
 
 Produces ``examples/images/tree_agentic_search.png``:
   (1) example trajectories on the grid (rollout-guided walks to the goal; random shooting's
@@ -126,7 +126,7 @@ def main() -> None:
         fontsize=12,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    out = Path(__file__).parent / "images" / "tree_agentic_search.png"
+    out = Path(__file__).parent.parent / "images" / "tree_agentic_search.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=130)
     print(f"wrote {out}")

@@ -26,8 +26,8 @@ violations are few, declining smoothly toward the structure-blind floor as they 
 -- and strictly dominates both pure assume-smooth and blind across the whole range. That is
 the honest realization of "fewer violations => better, gracefully worsening."
 
-Run with:  uv run python examples/violation_regret_demo.py
-           uv run --extra plot python examples/violation_regret_demo.py   # + PNG
+Run with:  uv run python examples/tree_bandits/violation_regret_demo.py
+           uv run --extra plot python examples/tree_bandits/violation_regret_demo.py   # + PNG
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ def main() -> None:
         "Value of structure vs. number of Lipschitz violations (multi-fidelity regime)", fontsize=11
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "tree_violation_regret.png"
+    out = Path(__file__).parent.parent / "images" / "tree_violation_regret.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

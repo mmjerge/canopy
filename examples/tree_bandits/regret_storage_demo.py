@@ -12,7 +12,7 @@ Two panels:
   (B) final regret vs peak memory: fixed-depth sweep traces the tradeoff frontier;
       adaptive sits below/left of it (better regret at less memory).
 
-Run with:  uv run --extra plot python examples/regret_storage_demo.py
+Run with:  uv run --extra plot python examples/tree_bandits/regret_storage_demo.py
 """
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ def main() -> None:
         fontsize=11,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "tree_regret_storage.png"
+    out = Path(__file__).parent.parent / "images" / "tree_regret_storage.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
