@@ -37,7 +37,7 @@ where `Ĝ(λ) = (1/n)Σ exp(λX_i)`, `V̂(λ)` is its sample variance, and
 
     B(v) ≤ min_{λ ∈ Λ} { (1/λ)[ log m + log Ĝ_upper(λ) − λ²σ²/2 ] − x̄ }.
 
-This is `mgf_bound` / `mgf_bound_from_moments` in `oco.bandits.maxmean`. It needs only
+This is `mgf_bound` / `mgf_bound_from_moments` in `canopy.bandits.maxmean`. It needs only
 O(|Λ|) running moments per node (`Σ exp(λX_i)`, `Σ exp(2λX_i)`), so it is cheap online.
 
 ## Why it is the right object (special cases)

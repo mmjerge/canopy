@@ -1,7 +1,7 @@
 # Reasoning-tree search: value-guided (edge-following) vs. best-of-N
 
 This is the first bridge from the theory to a concrete LLM use — test-time-compute search
-over a reasoning tree. Module: `oco.bandits.reasoning`.
+over a reasoning tree. Module: `canopy.bandits.reasoning`.
 
 ## Setup
 
@@ -62,7 +62,7 @@ The result above is **synthetic** — no LLM is involved; the "reward" and "valu
 It confirms the *mechanism and the math* (value-guided search beats best-of-N when the value
 signal is informative at the decision steps), not that it helps a real model.
 
-`oco.bandits.reasoning_llm` is the generator-agnostic harness for the real test: GSM8K-style
+`canopy.bandits.reasoning_llm` is the generator-agnostic harness for the real test: GSM8K-style
 answer extraction/grading, `best_of_n` (self-consistency) and `value_guided_search` (beam/tree
 search over reasoning steps with a cheap-rollout value), and a `Budget` counting generation
 calls. The value signal is a pluggable `value_fn` — **self-consistency** by default (the

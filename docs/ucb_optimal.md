@@ -1,7 +1,7 @@
 # A provably regret-optimal UCB-style algorithm for the hierarchical bandit
 
 Answers: *a UCB-style bias that is provably regret-optimal in this setting, and an
-algorithm.* Implemented as `run_hoo` in `oco.bandits.online`.
+algorithm.* Implemented as `run_hoo` in `canopy.bandits.online`.
 
 ## The UCB index and the bias term
 

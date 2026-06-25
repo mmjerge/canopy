@@ -9,7 +9,7 @@ storage/cost budget** — one framework, one regret/storage theory, three real a
 1. **Framework.** A hierarchical bandit on a (token) tree where an internal node's value
    is the aggregate (average) of its subtree's leaves, feedback is multi-fidelity
    (cheap/biased internal probes vs. expensive/unbiased leaf evaluations), and the cost is
-   a storage/compute budget. (`oco.bandits.tree`)
+   a storage/compute budget. (`canopy.bandits.tree`)
 2. **Regret-optimal algorithm + the expand-vs-refine rule.** UCB index
    `mean + sqrt(2 ln t / T) + spread(level)` with B-value backup (HOO/HCT); the
    per-node crossover "refine while statistically-limited, expand when `r(v) <= spread`"

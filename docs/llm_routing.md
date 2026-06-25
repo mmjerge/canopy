@@ -56,7 +56,7 @@ same resolution tradeoff as the rest of the framework.
 
 ## Path to real validation
 
-The algorithms are unchanged for real data — only `quality` changes. `oco.bandits.bedrock`
+The algorithms are unchanged for real data — only `quality` changes. `canopy.bandits.bedrock`
 provides this bridge: `BedrockClient` calls models via the Bedrock Converse API (uniform
 across providers) and `measure_quality_matrix(prompts, model_ids, client, grade)` returns
 the `(quality, costs)` arrays a `PrefixTreeRouting` consumes. See `examples/bedrock_routing.py`

@@ -1,8 +1,8 @@
 # Long-horizon agentic search: rollout-guided planning vs. best-of-N
 
 This is the agentic / multi-step extension of the reasoning-tree result. It moves from a
-static tree of leaf rewards (`oco.bandits.reasoning`) to a **real sequential decision process
-with state and dynamics** (`oco.bandits.agentic`), where the horizon is genuinely long and the
+static tree of leaf rewards (`canopy.bandits.reasoning`) to a **real sequential decision process
+with state and dynamics** (`canopy.bandits.agentic`), where the horizon is genuinely long and the
 cheap value signal lives at *intermediate* states.
 
 ## Why move off GSM8K
