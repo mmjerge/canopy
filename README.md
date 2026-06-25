@@ -29,6 +29,44 @@ Optional extras: `--extra plot` (matplotlib charts), `--extra llm` (Bedrock rout
 * Two regimes: **pure exploration** (identify the top-k leaves at least cost) and
   **regret minimization** (commit each round, compete with the best leaf).
 
+## Applications: three real LLM use cases
+
+The same machinery instantiates three LLM applications, each mapping a real problem onto the
+tree (leaf, arm/region, and budget). These are the empirical contributions of the paper.
+
+### 1. LLM routing
+*Mapping:* leaf = prompt, arm = model, region = subject / token-prefix. A hierarchical router
+learns which model to use for which prefix region, generalizing across prompts that share a
+prefix.
+*Result:* real MMLU + 6 Bedrock models — **0.84 quality vs 0.69** best-fixed-model, matching
+always-largest at ~**½ the cost** (≈12× lower regret than the best fixed policy).
+*Code:* `canopy.bandits.routing`; `examples/mmlu_routing.py`, `examples/llm_routing_demo.py`,
+`examples/bedrock_routing.py`. *Docs:* `docs/llm_routing.md`.
+
+### 2. Prefix caching
+*Mapping:* cache = ancestor-closed subtree of the token trie, storage = memory budget; caching
+a prefix saves recompute for every prompt through it.
+*Result:* matches LFU and the hindsight optimum on a stationary stream, and **beats both LFU
+and the best static cache under a popularity shift** (it tracks the drift).
+*Code:* `canopy.bandits.prefix_cache`; `examples/prefix_cache_demo.py`.
+*Note:* the cleanest of the three — the prefix tree **is** the actual cache data structure, so
+there is no tree-alignment assumption.
+
+### 3. Prompt optimization (trimming)
+*Mapping:* arm = trim level, region = subject. Adaptive per-subject prompt trimming.
+*Result:* real MMLU + nova-lite — adaptive trim beats the best fixed trim on accuracy
+(**0.77 vs 0.75**) and tokens (**97 vs 101**).
+*Code:* `examples/prompt_optimization.py`.
+*Honest caveat:* this run used an 8-token output cap that penalized verbose prompts; it is the
+weakest of the three and needs a re-run at a larger output budget to be airtight.
+
+```bash
+uv run --extra plot python examples/llm_routing_demo.py      # routing (synthetic + chart)
+uv run --extra plot python examples/prefix_cache_demo.py     # caching under drift
+uv run --extra plot --extra llm python examples/mmlu_routing.py        # real Bedrock routing
+uv run --extra plot --extra llm python examples/prompt_optimization.py # real Bedrock trimming
+```
+
 ## What's in the repo
 
 | Module | Role |
@@ -77,5 +115,6 @@ uv run --extra plot python examples/violation_regret_demo.py
 
 ## Docs
 
-`fixed_budget_bound.md`, `ucb_optimal.md`, `infinite_tree.md`, `lipschitz_regret.md`,
-`maxmean_bound.md`, `regret_storage_note.md`, `violation_regret.md`, `llm_routing.md`.
+`applications.md` (the three use cases), `fixed_budget_bound.md`, `ucb_optimal.md`,
+`infinite_tree.md`, `lipschitz_regret.md`, `maxmean_bound.md`, `regret_storage_note.md`,
+`violation_regret.md`, `llm_routing.md`.
