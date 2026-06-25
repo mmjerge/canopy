@@ -1,21 +1,17 @@
-"""Real-LLM backing for the routing experiments via Amazon Bedrock.
+"""Amazon Bedrock implementation of :class:`~canopy.llm.base.LLMClient`.
 
-Turns the synthetic ``PrefixTreeRouting`` quality arrays into *measured* per-model quality
-by calling Bedrock models (uniformly, via the Converse API) and grading the responses.
-The routing algorithms in :mod:`canopy.bandits.routing` are unchanged -- only the ``quality``
-matrix comes from real models.
+Calls models uniformly via the Bedrock Converse API and reports token-accurate usage, so the
+routing / prompt-trimming experiments can swap synthetic quality arrays for measured ones
+without changing any algorithm.
 
-Requires the optional ``llm`` extra (``uv sync --extra llm``) and AWS credentials with
-Bedrock invoke permission (e.g. the role provisioned by ``terraform/bedrock.tf``). Model
-access must also be enabled in the Bedrock console.
+Requires the optional ``llm`` extra (``uv sync --extra llm``) and AWS credentials with Bedrock
+invoke permission (e.g. the role provisioned by ``terraform/bedrock.tf``). Model access must
+also be enabled in the Bedrock console.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-
-import numpy as np
-from numpy.typing import NDArray
+from canopy.llm.base import Generation
 
 # Approximate USD price per 1K tokens (input, output); override as needed / per region.
 DEFAULT_PRICING: dict[str, tuple[float, float]] = {
@@ -44,17 +40,30 @@ class BedrockClient:
         region: AWS region (must have Bedrock + model access).
         role_arn: Optional role to assume (e.g. the terraform Bedrock app role).
         max_tokens: Default generation cap.
+        pricing: Optional ``model_id -> (in, out)`` per-1K-token price table.
+        runtime: Optional pre-built ``bedrock-runtime`` client (for injection/testing).
     """
 
     def __init__(
-        self, region: str = "us-east-1", role_arn: str | None = None, max_tokens: int = 512
+        self,
+        region: str = "us-east-1",
+        role_arn: str | None = None,
+        max_tokens: int = 512,
+        pricing: dict[str, tuple[float, float]] | None = None,
+        runtime: object | None = None,
     ) -> None:
+        self.max_tokens = max_tokens
+        self.pricing = pricing or DEFAULT_PRICING
+        if runtime is not None:
+            self.runtime = runtime
+            return
         import boto3  # lazy: only needed when actually calling Bedrock
 
-        self.max_tokens = max_tokens
         if role_arn:
             sts = boto3.client("sts", region_name=region)
-            creds = sts.assume_role(RoleArn=role_arn, RoleSessionName="oco-routing")["Credentials"]
+            creds = sts.assume_role(RoleArn=role_arn, RoleSessionName="canopy-routing")[
+                "Credentials"
+            ]
             session = boto3.Session(
                 aws_access_key_id=creds["AccessKeyId"],
                 aws_secret_access_key=creds["SecretAccessKey"],
@@ -70,7 +79,7 @@ class BedrockClient:
         prompt: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
-    ) -> tuple[str, int, int]:
+    ) -> Generation:
         """Return ``(response_text, input_tokens, output_tokens)`` for one prompt.
 
         ``temperature`` (if given) enables diverse sampling across calls -- needed for
@@ -88,31 +97,6 @@ class BedrockClient:
         usage = resp["usage"]
         return text, int(usage["inputTokens"]), int(usage["outputTokens"])
 
-
-def measure_quality_matrix(
-    prompts: Sequence[str],
-    model_ids: Sequence[str],
-    client: BedrockClient,
-    grade: Callable[[str, str], float],
-    pricing: dict[str, tuple[float, float]] | None = None,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Build ``(quality, costs)`` for :class:`~canopy.bandits.routing.PrefixTreeRouting`.
-
-    For each (model, prompt) it generates a response, grades it to a quality in [0, 1],
-    and accumulates token cost. Returns the ``(n_models, n_prompts)`` quality matrix and
-    the per-model average cost per query (in USD). ``len(prompts)`` should equal
-    ``branching ** depth`` for the routing tree.
-    """
-    pricing = pricing or DEFAULT_PRICING
-    n_m, n_p = len(model_ids), len(prompts)
-    quality = np.zeros((n_m, n_p), dtype=np.float64)
-    costs = np.zeros(n_m, dtype=np.float64)
-    for mi, model_id in enumerate(model_ids):
-        in_price, out_price = pricing.get(model_id, (0.001, 0.001))
-        total = 0.0
-        for pi, prompt in enumerate(prompts):
-            text, in_tok, out_tok = client.generate(model_id, prompt)
-            quality[mi, pi] = float(np.clip(grade(prompt, text), 0.0, 1.0))
-            total += in_price * in_tok / 1000.0 + out_price * out_tok / 1000.0
-        costs[mi] = total / max(1, n_p)
-    return quality, costs
+    def price_per_1k(self, model_id: str) -> tuple[float, float]:
+        """Per-1K-token ``(input, output)`` USD price for ``model_id`` (0 if unknown)."""
+        return self.pricing.get(model_id, (0.001, 0.001))

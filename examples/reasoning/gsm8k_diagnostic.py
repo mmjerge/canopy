@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 
 from canopy.bandits.reasoning_llm import best_of_n, extract_answer, value_guided_search
+from canopy.llm import as_generate_fn
 
 
 def load_gsm8k(n: int):
@@ -38,14 +39,12 @@ def main() -> None:
     ap.add_argument("--final-rollouts", type=int, default=5)
     args = ap.parse_args()
 
-    from canopy.bandits.bedrock import BedrockClient
+    from canopy.llm import BedrockClient
 
     client = BedrockClient(region=args.region, max_tokens=512)
     problems = load_gsm8k(args.n_problems)
 
-    def generate(prompt: str, max_tokens: int, seed: int) -> str:
-        text, _, _ = client.generate(args.model, prompt, temperature=0.7, max_tokens=max_tokens)
-        return text
+    generate = as_generate_fn(client, args.model, temperature=0.7)
 
     # matched budget: value-guided's total calls = best-of-N's sample count
     vg_calls = args.n_steps * (args.branching * (1 + args.rollouts)) + args.final_rollouts

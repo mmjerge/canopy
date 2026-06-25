@@ -56,11 +56,12 @@ same resolution tradeoff as the rest of the framework.
 
 ## Path to real validation
 
-The algorithms are unchanged for real data — only `quality` changes. `canopy.bandits.bedrock`
-provides this bridge: `BedrockClient` calls models via the Bedrock Converse API (uniform
-across providers) and `measure_quality_matrix(prompts, model_ids, client, grade)` returns
-the `(quality, costs)` arrays a `PrefixTreeRouting` consumes. See `examples/llm_routing/bedrock_routing.py`
-and the Terraform Bedrock stack (`terraform/bedrock.tf`) for the IAM/logging setup.
+The algorithms are unchanged for real data — only `quality` changes. `canopy.llm`
+provides this bridge: a provider client (`BedrockClient`, `OpenAIClient`, ... implementing the
+`LLMClient` protocol) generates completions, and `measure_quality_matrix(prompts, model_ids,
+client, grade)` returns the `(quality, costs)` arrays a `PrefixTreeRouting` consumes. See
+`examples/llm_routing/bedrock_routing.py` and the Terraform Bedrock stack
+(`terraform/bedrock.tf`) for the IAM/logging setup.
 
 1. **Drop in a router benchmark** (e.g. measured per-model correctness on a prompt set):
    build `PrefixTreeRouting` from real `q_m(prompt)` arrays and rerun. Tokenize prompts to
