@@ -87,7 +87,8 @@ def main() -> None:
     ax.grid(True, which="both", ls=":", alpha=0.5)
     ax.legend(loc="upper right")
     fig.tight_layout()
-    out = Path(__file__).parent / "tree_jump_robustness.png"
+    out = Path(__file__).parent / "images" / "tree_jump_robustness.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

@@ -141,7 +141,8 @@ def _plot(results: dict, quality: np.ndarray) -> None:
     axB.grid(True, ls=":", alpha=0.5)
     fig.suptitle("Routing over real MMLU subjects (8 subjects, 6 Bedrock models)", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "mmlu_routing.png"
+    out = Path(__file__).parent / "images" / "mmlu_routing.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

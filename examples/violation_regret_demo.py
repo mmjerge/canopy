@@ -125,7 +125,8 @@ def main() -> None:
     fig.suptitle("Value of structure vs. number of Lipschitz violations (multi-fidelity regime)",
                  fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "tree_violation_regret.png"
+    out = Path(__file__).parent / "images" / "tree_violation_regret.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

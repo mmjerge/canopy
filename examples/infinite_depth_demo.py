@@ -75,7 +75,8 @@ def main() -> None:
     fig.suptitle(f"Infinite-depth regime (arity {BRANCHING}, horizon {HORIZON}): "
                  "regret-optimal HOO compresses to a finite explored tree", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "tree_infinite_depth.png"
+    out = Path(__file__).parent / "images" / "tree_infinite_depth.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

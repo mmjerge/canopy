@@ -28,6 +28,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from canopy.bandits.maxmean import mgf_bound_from_moments
 from canopy.bandits.tree import Node, TreeBandit
 
 
@@ -238,8 +239,6 @@ def run_adaptive_mgf(
     and the bias bound are now data-driven and valid w.h.p. -- no assumed spread schedule
     and no light-tail heuristic. Per node we keep O(len(lambdas)) running MGF moments.
     """
-    from canopy.bandits.maxmean import mgf_bound_from_moments
-
     if lambdas is None:
         lambdas = np.array([0.5, 1.0, 2.0, 4.0, 8.0])
     log_term = math.log(sum(env.branching**lvl for lvl in range(env.depth + 1)) * horizon)

@@ -121,7 +121,8 @@ def main() -> None:
     fig.suptitle("Adaptive expansion (expand when r(v) <= spread/heterogeneity) is "
                  "near regret-optimal at a fraction of the memory", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "tree_regret_storage.png"
+    out = Path(__file__).parent / "images" / "tree_regret_storage.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

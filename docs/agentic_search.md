@@ -59,7 +59,7 @@ number of steps -- the same matched-budget discipline used for the GSM8K calls.
 At short horizons best-of-N ties or wins (random shooting is fine when the path is short). As
 the horizon grows it collapses to zero while rollout-guided planning holds up -- the
 long-horizon separation, far outside noise, and the opposite of the GSM8K picture. The chart is
-`examples/tree_agentic_search.png`.
+`examples/images/tree_agentic_search.png`.
 
 ## Honest scope and limits
 

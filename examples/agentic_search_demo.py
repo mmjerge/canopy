@@ -6,7 +6,7 @@ same number of simulator steps; the only difference is *how* they allocate that 
 
     uv run --extra plot python examples/agentic_search_demo.py
 
-Produces ``examples/tree_agentic_search.png``:
+Produces ``examples/images/tree_agentic_search.png``:
   (1) example trajectories on the grid (rollout-guided walks to the goal; random shooting's
       best-of-N sample wanders);
   (2) goal-reaching rate vs. horizon -- best-of-N collapses as the horizon grows while
@@ -15,6 +15,8 @@ Produces ``examples/tree_agentic_search.png``:
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -108,7 +110,8 @@ def main() -> None:
     fig.suptitle("Long-horizon agentic search: where to spend test-time compute "
                  "(equal budget, the only difference is allocation)", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    out = "examples/tree_agentic_search.png"
+    out = Path(__file__).parent / "images" / "tree_agentic_search.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=130)
     print(f"wrote {out}")
     print(f"  panel1: best-of-N reached={bo.reached_goal}, rollout-guided reached={vg.reached_goal}")

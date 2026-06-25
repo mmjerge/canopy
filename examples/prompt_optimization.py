@@ -137,7 +137,8 @@ def main() -> None:
     ax.grid(True, ls=":", alpha=0.5)
     ax.legend(loc="lower right", fontsize=9)
     fig.tight_layout()
-    out = Path(__file__).parent / "prompt_optimization.png"
+    out = Path(__file__).parent / "images" / "prompt_optimization.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

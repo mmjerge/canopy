@@ -104,7 +104,8 @@ def main() -> None:
     axB.set_xlabel("leaf index")
     axB.set_title("Multiscale edge score spikes at every violation (all scales)", fontsize=10)
     fig.tight_layout()
-    out = Path(__file__).parent / "tree_multiscale_edge.png"
+    out = Path(__file__).parent / "images" / "tree_multiscale_edge.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

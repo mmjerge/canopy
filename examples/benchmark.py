@@ -8,7 +8,7 @@ Budgets are measured in cost. We compare, at equal cost budget:
   * SuccessiveEliminationTopK -- STRONG structure-blind baseline (leaf evals only)
   * UniformTopK              -- weak structure-blind baseline
 
-Produces a single side-by-side chart (tree_topk_benchmark.png) with two panels:
+Produces a single side-by-side chart (images/tree_topk_benchmark.png) with two panels:
   1. recall vs the probe/leaf cost ratio (fixed budget) -- the tree overtakes the strong
      baseline only once probes are cheap enough.
   2. recall vs cost budget at a cheap probe cost.
@@ -110,7 +110,8 @@ def main() -> None:
     fig.suptitle(f"Multi-fidelity tree top-k: {LEAVES} leaves, branching={BRANCHING}, "
                  f"depth={DEPTH}", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "tree_topk_benchmark.png"
+    out = Path(__file__).parent / "images" / "tree_topk_benchmark.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")

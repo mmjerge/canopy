@@ -6,12 +6,16 @@ import numpy as np
 import pytest
 
 from canopy.bandits import (
+    HierarchicalTopK,
     SuccessiveEliminationTopK,
     TreeBandit,
     detect_violations,
     violation_family_leaf_means,
 )
-from canopy.bandits.rewards import hierarchical_gaussian_leaf_means
+from canopy.bandits.rewards import (
+    adversarial_spike_leaf_means,
+    hierarchical_gaussian_leaf_means,
+)
 
 
 def test_violation_family_has_unique_optimum_and_decoys():
@@ -84,9 +88,6 @@ def test_identification_cost_grows_with_violations():
 def test_detect_and_relax_hybrid_beats_assume_smooth_on_spikes():
     # Multi-fidelity regime: cheap probes + tight budget. Detecting the spike cells from
     # data and relaxing the smooth bound there recovers accuracy that assume-smooth loses.
-    from canopy.bandits import HierarchicalTopK
-    from canopy.bandits.rewards import adversarial_spike_leaf_means
-
     b, d, level = 4, 5, 3
     cell = b ** (d - level)
     hi, hy = [], []
@@ -111,9 +112,6 @@ def test_detect_and_relax_hybrid_beats_assume_smooth_on_spikes():
 def test_edge_targeted_beats_blind_at_tight_budget():
     # Sample efficiency: at a tight budget, isolating the edge cells from cheap probes and
     # sampling around them finds the hidden optimum far more often than structure-blind.
-    from canopy.bandits import HierarchicalTopK, SuccessiveEliminationTopK
-    from canopy.bandits.rewards import adversarial_spike_leaf_means
-
     b, d, level, budget = 4, 5, 3, 400
     cell = b ** (d - level)
     blind, edge = [], []

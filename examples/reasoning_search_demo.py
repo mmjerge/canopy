@@ -95,7 +95,8 @@ def main() -> None:
     fig.suptitle("Value-guided reasoning-tree search finds the correct trace where best-of-N "
                  "cannot", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    out = Path(__file__).parent / "tree_reasoning_search.png"
+    out = Path(__file__).parent / "images" / "tree_reasoning_search.png"
+    out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"\nsaved chart to {out}")
