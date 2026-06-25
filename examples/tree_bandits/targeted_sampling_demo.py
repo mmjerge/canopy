@@ -20,8 +20,8 @@ fixed cost budget for:
 Result (sample-efficiency curve): edge-targeted reaches high accuracy at a small fraction of
 the budget the blind method needs -- it samples around the edges instead of everywhere.
 
-Run with:  uv run python examples/targeted_sampling_demo.py
-           uv run --extra plot python examples/targeted_sampling_demo.py   # + PNG
+Run with:  uv run python examples/tree_bandits/targeted_sampling_demo.py
+           uv run --extra plot python examples/tree_bandits/targeted_sampling_demo.py   # + PNG
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ def main() -> None:
     ax.grid(True, ls=":", alpha=0.5)
     ax.legend(loc="lower right", fontsize=9)
     fig.tight_layout()
-    out = Path(__file__).parent / "images" / "tree_targeted_sampling.png"
+    out = Path(__file__).parent.parent / "images" / "tree_targeted_sampling.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

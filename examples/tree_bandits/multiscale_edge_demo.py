@@ -12,8 +12,8 @@ On a tree with mixed-width violations (wide blocks + single-leaf spikes, plus th
 the multiscale map catches them all and gives a clean per-leaf edge score that spikes at the
 violations -- the signal used to "sample around the sharp edge".
 
-Run with:  uv run python examples/multiscale_edge_demo.py
-           uv run --extra plot python examples/multiscale_edge_demo.py   # + PNG
+Run with:  uv run python examples/tree_bandits/multiscale_edge_demo.py
+           uv run --extra plot python examples/tree_bandits/multiscale_edge_demo.py   # + PNG
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ def main() -> None:
     axB.set_xlabel("leaf index")
     axB.set_title("Multiscale edge score spikes at every violation (all scales)", fontsize=10)
     fig.tight_layout()
-    out = Path(__file__).parent / "images" / "tree_multiscale_edge.png"
+    out = Path(__file__).parent.parent / "images" / "tree_multiscale_edge.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

@@ -8,7 +8,7 @@ Easy questions are leaves 0-7, hard are 8-15, so the routing tree's regions corr
 difficulty -- a good router should send easy prompts to the cheap model and hard ones to
 the strong model.
 
-Run:  uv run --extra llm --extra plot python examples/bedrock_benchmark.py
+Run:  uv run --extra llm --extra plot python examples/llm_routing/bedrock_benchmark.py
 (Needs AWS creds with Bedrock access; caches results to bedrock_benchmark.npz.)
 """
 

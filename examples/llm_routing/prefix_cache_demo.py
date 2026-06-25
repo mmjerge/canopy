@@ -10,7 +10,7 @@ Panels:
   (B) savings over time across a mid-stream popularity shift -- adaptive tracks the new
       distribution and beats LFU (sticky) and even the best *static* cache.
 
-Run with:  uv run --extra plot python examples/prefix_cache_demo.py
+Run with:  uv run --extra plot python examples/llm_routing/prefix_cache_demo.py
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ def main() -> None:
         "Prefix-cache management as online tree selection under a memory budget", fontsize=11
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "tree_prefix_cache.png"
+    out = Path(__file__).parent.parent / "images" / "tree_prefix_cache.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

@@ -3,9 +3,9 @@
 Internal-node probes are cheap but biased; leaf evaluations are expensive but unbiased.
 Compares the hierarchical method (cheap probes to localize, then leaf evals to confirm)
 against the strong structure-blind baseline and the weak uniform baseline, at one tight
-budget. For the full fidelity/budget sweeps and charts, see examples/benchmark.py.
+budget. For the full fidelity/budget sweeps and charts, see examples/tree_bandits/benchmark.py.
 
-Run with:  uv run python examples/tree_topk_demo.py
+Run with:  uv run python examples/tree_bandits/tree_topk_demo.py
 """
 
 from __future__ import annotations

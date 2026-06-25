@@ -5,7 +5,7 @@ model to use per subject. Models span providers and tiers (Llama 70B/8B, Nova Pr
 Micro, Mistral-Small) so they have genuinely complementary strengths -- the condition the
 earlier toy benchmark lacked.
 
-Run:  uv run --extra bench --extra plot python examples/mmlu_routing.py
+Run:  uv run --extra bench --extra plot python examples/llm_routing/mmlu_routing.py
 Needs AWS creds with Bedrock access. Caches per-model results to mmlu_routing.npz.
 """
 
@@ -176,7 +176,7 @@ def _plot(results: dict, quality: np.ndarray) -> None:
     axB.grid(True, ls=":", alpha=0.5)
     fig.suptitle("Routing over real MMLU subjects (8 subjects, 6 Bedrock models)", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "mmlu_routing.png"
+    out = Path(__file__).parent.parent / "images" / "mmlu_routing.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

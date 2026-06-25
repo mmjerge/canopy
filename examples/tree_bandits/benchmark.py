@@ -13,7 +13,7 @@ Produces a single side-by-side chart (images/tree_topk_benchmark.png) with two p
      baseline only once probes are cheap enough.
   2. recall vs cost budget at a cheap probe cost.
 
-Run with:  uv run --extra plot python examples/benchmark.py
+Run with:  uv run --extra plot python examples/tree_bandits/benchmark.py
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def main() -> None:
         fontsize=12,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent / "images" / "tree_topk_benchmark.png"
+    out = Path(__file__).parent.parent / "images" / "tree_topk_benchmark.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)

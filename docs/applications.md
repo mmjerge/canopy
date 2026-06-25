@@ -11,8 +11,8 @@ contributions of the ICLR/ICML paper.
   decisions across prompts that share a prefix.
 - **Result.** Real MMLU + 6 Bedrock models: 0.84 quality vs 0.69 for the best fixed model,
   matching always-largest at ~½ the cost (≈12× lower regret than the best fixed policy).
-- **Code.** `canopy.bandits.routing`; `examples/mmlu_routing.py`,
-  `examples/llm_routing_demo.py`, `examples/bedrock_routing.py`. Real models via
+- **Code.** `canopy.bandits.routing`; `examples/llm_routing/mmlu_routing.py`,
+  `examples/llm_routing/llm_routing_demo.py`, `examples/llm_routing/bedrock_routing.py`. Real models via
   `canopy.bandits.bedrock` (needs the `llm` extra + AWS access).
 - **Docs.** `docs/llm_routing.md`.
 
@@ -22,7 +22,7 @@ contributions of the ICLR/ICML paper.
   Caching a prefix saves recompute for every prompt that passes through it.
 - **Result.** Matches LFU and the hindsight optimum on a stationary stream, and beats both LFU
   and the best static cache under a popularity shift (it tracks the drift).
-- **Code.** `canopy.bandits.prefix_cache`; `examples/prefix_cache_demo.py`.
+- **Code.** `canopy.bandits.prefix_cache`; `examples/llm_routing/prefix_cache_demo.py`.
 - **Why it's the cleanest.** The prefix tree *is* the actual cache data structure (vLLM APC /
   SGLang RadixAttention), so there is no tree-alignment assumption, unlike routing/trimming
   where the tree must align with capability structure.
@@ -32,7 +32,7 @@ contributions of the ICLR/ICML paper.
 - **Mapping.** Arm = trim level; region = subject. Adaptive per-subject prompt trimming.
 - **Result.** Real MMLU + nova-lite: adaptive trim beats the best fixed trim on accuracy
   (0.77 vs 0.75) and tokens (97 vs 101).
-- **Code.** `examples/prompt_optimization.py`.
+- **Code.** `examples/llm_routing/prompt_optimization.py`.
 - **Honest caveat.** This run used an 8-token output cap that penalized verbose prompts; it is
   the weakest of the three and needs a re-run at a larger output budget to be airtight.
 

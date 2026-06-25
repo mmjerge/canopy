@@ -78,7 +78,7 @@ and there we inflate the bias to the data-driven `σ_within·√(2 log m)`. This
 tight Lipschitz bias where the data looks smooth, inflated bias only where a discontinuity
 is detected.
 
-Empirically (1024 leaves, 4 jumps, horizon 15k, 10 seeds; `examples/jump_robustness_demo.py`):
+Empirically (1024 leaves, 4 jumps, horizon 15k, 10 seeds; `examples/tree_bandits/jump_robustness_demo.py`):
 
 | jump width | assumed-smooth | data-driven | hybrid |
 | --- | --- | --- | --- |

@@ -15,7 +15,7 @@ Takeaway: the data-driven version is *robust* to how hidden the jumps are (rough
 regret), while assumed smoothness only does well when jumps are wide enough to show up in
 coarse averages.
 
-Run with:  uv run --extra plot python examples/jump_robustness_demo.py
+Run with:  uv run --extra plot python examples/tree_bandits/jump_robustness_demo.py
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def main() -> None:
     ax.grid(True, which="both", ls=":", alpha=0.5)
     ax.legend(loc="upper right")
     fig.tight_layout()
-    out = Path(__file__).parent / "images" / "tree_jump_robustness.png"
+    out = Path(__file__).parent.parent / "images" / "tree_jump_robustness.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=150)
     plt.close(fig)
