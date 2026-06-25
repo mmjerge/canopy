@@ -122,3 +122,10 @@ uv run --extra plot python examples/tree_bandits/violation_regret_demo.py
 `applications.md` (the three use cases), `fixed_budget_bound.md`, `ucb_optimal.md`,
 `infinite_tree.md`, `lipschitz_regret.md`, `maxmean_bound.md`, `regret_storage_note.md`,
 `violation_regret.md`, `llm_routing.md`.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development
+setup and PR workflow, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community
+expectations. Security reports: see [SECURITY.md](SECURITY.md). Release notes live in
+[CHANGELOG.md](CHANGELOG.md).
