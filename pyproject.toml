@@ -15,7 +15,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "black>=24.8",
-    "flake8>=7.0",
+    "flake8>=7.3.0",
     "mypy>=1.11",
     "pre-commit>=4.0",
 ]
