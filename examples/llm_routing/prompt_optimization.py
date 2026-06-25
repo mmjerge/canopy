@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from canopy.bandits import PrefixTreeRouting, run_router
-from canopy.bandits.bedrock import BedrockClient
+from canopy.llm import BedrockClient
 
 SUBJECTS = [
     "elementary_mathematics",

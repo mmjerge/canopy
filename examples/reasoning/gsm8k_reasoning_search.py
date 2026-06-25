@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 
 from canopy.bandits.reasoning_llm import best_of_n, value_guided_search
+from canopy.llm import as_generate_fn
 
 MODEL_ID = "us.meta.llama3-1-8b-instruct-v1:0"
 
@@ -58,7 +59,7 @@ def main() -> None:
     args = ap.parse_args()
 
     try:
-        from canopy.bandits.bedrock import BedrockClient
+        from canopy.llm import BedrockClient
 
         client = BedrockClient(region=args.region, max_tokens=512)
         problems = load_gsm8k(args.n_problems)
@@ -72,9 +73,7 @@ def main() -> None:
         )
         return
 
-    def generate(prompt: str, max_tokens: int, seed: int) -> str:
-        text, _, _ = client.generate(args.model, prompt, temperature=0.7, max_tokens=max_tokens)
-        return text
+    generate = as_generate_fn(client, args.model, temperature=0.7)
 
     # value-guided's total generation calls, used to match best-of-N's sample count
     vg_budget = args.n_steps * (args.branching * (1 + args.rollouts)) + args.final_rollouts

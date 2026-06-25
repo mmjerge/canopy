@@ -19,10 +19,13 @@ Most demos need only `numpy`. Some need optional extras (see `pyproject.toml`):
 
 - `plot` — `matplotlib`, for the demos that render charts.
 - `llm` — `boto3`, for demos that call Amazon Bedrock.
+- `openai` — `openai`, to use `canopy.llm.OpenAIClient` (set `OPENAI_API_KEY`) in place of Bedrock.
 - `bench` — `boto3` + `datasets`, for demos that pull a real benchmark (MMLU, GSM8K).
 
 The `llm`/`bench` demos make real, paid model calls and require AWS credentials with
-Bedrock access. Start small (small `--n-problems`, small budgets).
+Bedrock access. Start small (small `--n-problems`, small budgets). The demos go through
+the provider-agnostic `canopy.llm.LLMClient` interface, so swapping Bedrock for another
+provider (e.g. `OpenAIClient`) needs no algorithm changes.
 
 ## tree_bandits — core theory (synthetic)
 

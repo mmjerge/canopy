@@ -23,6 +23,9 @@ plot = [
 llm = [
     "boto3>=1.34",
 ]
+openai = [
+    "openai>=1.0",
+]
 bench = [
     "boto3>=1.34",
     "datasets>=2.18",

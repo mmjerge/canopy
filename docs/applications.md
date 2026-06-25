@@ -13,7 +13,7 @@ contributions of the ICLR/ICML paper.
   matching always-largest at ~½ the cost (≈12× lower regret than the best fixed policy).
 - **Code.** `canopy.bandits.routing`; `examples/llm_routing/mmlu_routing.py`,
   `examples/llm_routing/llm_routing_demo.py`, `examples/llm_routing/bedrock_routing.py`. Real models via
-  `canopy.bandits.bedrock` (needs the `llm` extra + AWS access).
+  `canopy.llm` (`BedrockClient` / `OpenAIClient`; needs the matching extra + credentials).
 - **Docs.** `docs/llm_routing.md`.
 
 ## 2. Prefix caching
