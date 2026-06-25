@@ -12,9 +12,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
     "ruff>=0.6",
     "black>=24.8",
     "flake8>=7.0",
+    "mypy>=1.11",
     "pre-commit>=4.0",
 ]
 plot = [
@@ -46,6 +48,28 @@ src = ["src"]
 line-length = 100
 target-version = ["py310"]
 
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "src"
+files = ["src/canopy"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.coverage.run]
+source = ["canopy"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]

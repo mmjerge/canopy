@@ -9,6 +9,7 @@ local servers, etc.).
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from canopy.llm.base import Generation
 
@@ -40,7 +41,7 @@ class OpenAIClient:
         base_url: str | None = None,
         max_tokens: int = 512,
         pricing: dict[str, tuple[float, float]] | None = None,
-        client: object | None = None,
+        client: Any | None = None,
     ) -> None:
         self.max_tokens = max_tokens
         self.pricing = pricing or DEFAULT_PRICING
