@@ -19,8 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
-from oco.bandits import PrefixTreeRouting, run_router
-from oco.bandits.bedrock import BedrockClient, measure_quality_matrix
+from canopy.bandits import PrefixTreeRouting, run_router
+from canopy.bandits.bedrock import BedrockClient, measure_quality_matrix
 
 # (prompt, answer) -- first 8 easy, last 8 hard.
 BENCH: list[tuple[str, str]] = [

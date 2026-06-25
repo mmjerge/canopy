@@ -6,8 +6,8 @@ Modules:
     bandits    -- EXP3 and the tree-structured top-k identification task. [Ch. 6 + brief]
 """
 
-from oco.algorithms import OnlineGradientDescent, StronglyConvexOGD
-from oco.experts import Hedge, RandomizedWeightedMajority
+from canopy.algorithms import OnlineGradientDescent, StronglyConvexOGD
+from canopy.experts import Hedge, RandomizedWeightedMajority
 
 __all__ = [
     "OnlineGradientDescent",

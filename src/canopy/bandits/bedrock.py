@@ -2,7 +2,7 @@
 
 Turns the synthetic ``PrefixTreeRouting`` quality arrays into *measured* per-model quality
 by calling Bedrock models (uniformly, via the Converse API) and grading the responses.
-The routing algorithms in :mod:`oco.bandits.routing` are unchanged -- only the ``quality``
+The routing algorithms in :mod:`canopy.bandits.routing` are unchanged -- only the ``quality``
 matrix comes from real models.
 
 Requires the optional ``llm`` extra (``uv sync --extra llm``) and AWS credentials with
@@ -90,7 +90,7 @@ def measure_quality_matrix(
     grade: Callable[[str, str], float],
     pricing: dict[str, tuple[float, float]] | None = None,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Build ``(quality, costs)`` for :class:`~oco.bandits.routing.PrefixTreeRouting`.
+    """Build ``(quality, costs)`` for :class:`~canopy.bandits.routing.PrefixTreeRouting`.
 
     For each (model, prompt) it generates a response, grades it to a quality in [0, 1],
     and accumulates token cost. Returns the ``(n_models, n_prompts)`` quality matrix and

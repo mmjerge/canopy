@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from oco.bandits import geometric_sigma, hierarchical_gaussian_leaf_means, hierarchical_spread
+from canopy.bandits import geometric_sigma, hierarchical_gaussian_leaf_means, hierarchical_spread
 
 
 def test_leaf_means_shape():
@@ -50,8 +50,8 @@ def test_spread_bound_holds_empirically():
     violations = 0
     trials = 200
     for _ in range(trials):
-        from oco.bandits import TreeBandit
-        from oco.bandits.tree import Node
+        from canopy.bandits import TreeBandit
+        from canopy.bandits.tree import Node
 
         env = TreeBandit.from_hierarchical_gaussian(branching, depth, sigma=sigma, rng=rng)
         for level in range(depth):
@@ -66,7 +66,7 @@ def test_spread_bound_holds_empirically():
 
 
 def test_adversarial_spikes_structure():
-    from oco.bandits import adversarial_spike_leaf_means
+    from canopy.bandits import adversarial_spike_leaf_means
 
     means = adversarial_spike_leaf_means(
         branching=4, depth=3, n_spikes=3, low=0.2, high=0.95, jitter=0.0,

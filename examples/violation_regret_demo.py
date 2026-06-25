@@ -36,13 +36,13 @@ from pathlib import Path
 
 import numpy as np
 
-from oco.bandits import (
+from canopy.bandits import (
     HierarchicalTopK,
     SuccessiveEliminationTopK,
     TreeBandit,
     detect_violations,
 )
-from oco.bandits.rewards import adversarial_spike_leaf_means
+from canopy.bandits.rewards import adversarial_spike_leaf_means
 
 BRANCHING, DEPTH, LEVEL = 4, 5, 3
 BUDGET = 400.0           # tight cost budget (leaf_cost 1, probe_cost 0.05)

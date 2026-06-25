@@ -1,10 +1,10 @@
-"""Tests for the data-driven max-mean bounds (oco.bandits.maxmean)."""
+"""Tests for the data-driven max-mean bounds (canopy.bandits.maxmean)."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits.maxmean import (
+from canopy.bandits.maxmean import (
     mgf_bound,
     mgf_bound_from_moments,
     samuelson_bound,

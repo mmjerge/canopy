@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import TreeBandit, detect_violations, multiscale_edge_map
-from oco.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
+from canopy.bandits import TreeBandit, detect_violations, multiscale_edge_map
+from canopy.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
 
 B, D = 4, 5
 N = B**D

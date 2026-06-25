@@ -2,7 +2,7 @@
 
 :class:`SuccessiveEliminationTopK` is a strong (not naive) baseline: it uses the exact
 same Hoeffding confidence intervals and elimination rule as the leaf-certification phase
-of :class:`~oco.bandits.topk.HierarchicalTopK`, but it only ever samples leaves -- it
+of :class:`~canopy.bandits.topk.HierarchicalTopK`, but it only ever samples leaves -- it
 cannot probe internal-node averages. Comparing the two at equal try budget therefore
 isolates the value of the tree descent itself, rather than comparing against an
 artificially weak uniform sampler.
@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import math
 
-from oco.bandits.topk import TopKResult, _Stats
-from oco.bandits.tree import TreeBandit
+from canopy.bandits.topk import TopKResult, _Stats
+from canopy.bandits.tree import TreeBandit
 
 
 class SuccessiveEliminationTopK:

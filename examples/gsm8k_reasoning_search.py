@@ -1,6 +1,6 @@
 """Real-LLM test: value-guided reasoning search vs. best-of-N on GSM8K, at equal compute.
 
-This is the make-or-break experiment behind ``oco.bandits.reasoning`` / ``reasoning_llm``:
+This is the make-or-break experiment behind ``canopy.bandits.reasoning`` / ``reasoning_llm``:
 does value-guided (edge-following) test-time search beat best-of-N on a *real* model? It
 calls a model through Amazon Bedrock (the same client as the routing experiments), runs both
 strategies on a GSM8K subset at a matched budget of generation calls, and reports accuracy.
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import argparse
 
-from oco.bandits.reasoning_llm import best_of_n, value_guided_search
+from canopy.bandits.reasoning_llm import best_of_n, value_guided_search
 
 MODEL_ID = "us.meta.llama3-1-8b-instruct-v1:0"
 
@@ -53,7 +53,7 @@ def main() -> None:
     args = ap.parse_args()
 
     try:
-        from oco.bandits.bedrock import BedrockClient
+        from canopy.bandits.bedrock import BedrockClient
         client = BedrockClient(region=args.region, max_tokens=512)
         problems = load_gsm8k(args.n_problems)
     except Exception as e:  # noqa: BLE001 -- missing extras / creds / model access

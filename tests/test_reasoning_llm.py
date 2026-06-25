@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits.reasoning_llm import (
+from canopy.bandits.reasoning_llm import (
     best_of_n,
     extract_answer,
     is_correct,

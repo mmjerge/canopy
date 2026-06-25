@@ -1,8 +1,8 @@
 """Long-horizon agentic search: rollout-guided planning vs. best-of-N (random shooting).
 
-This lifts the reasoning-tree result (``oco.bandits.reasoning``) from a static tree of leaf
+This lifts the reasoning-tree result (``canopy.bandits.reasoning``) from a static tree of leaf
 rewards to a *real sequential decision process* with state and dynamics -- the agentic /
-multi-step setting. It is the same multi-fidelity structure as :class:`oco.bandits.tree.TreeBandit`:
+multi-step setting. It is the same multi-fidelity structure as :class:`canopy.bandits.tree.TreeBandit`:
 
 * an **expensive, unbiased** signal -- the terminal reward of a committed trajectory -- and
 * a **cheap, biased** signal -- a short random rollout from a partial trajectory (the value

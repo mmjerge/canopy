@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import PrefixTreeRouting, make_routing_scenario, run_router
+from canopy.bandits import PrefixTreeRouting, make_routing_scenario, run_router
 
 
 def _env(seed, lam=0.3):

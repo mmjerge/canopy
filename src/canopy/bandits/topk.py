@@ -1,4 +1,4 @@
-"""Top-k leaf identification on a :class:`~oco.bandits.tree.TreeBandit`.
+"""Top-k leaf identification on a :class:`~canopy.bandits.tree.TreeBandit`.
 
 Both strategies operate under a fixed COST ``budget`` and return the empirical top-k.
 Leaf evaluations cost ``env.leaf_cost`` (expensive); internal probes cost
@@ -23,7 +23,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from oco.bandits.tree import Node, TreeBandit
+from canopy.bandits.tree import Node, TreeBandit
 
 
 @dataclass

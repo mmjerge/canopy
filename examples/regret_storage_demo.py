@@ -22,7 +22,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from oco.bandits import (
+from canopy.bandits import (
     TreeBandit,
     geometric_sigma,
     hierarchical_spread,

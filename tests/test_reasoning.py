@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import (
+from canopy.bandits import (
     best_of_n,
     reasoning_tree_rewards,
     success_rate,

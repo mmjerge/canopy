@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import (
+from canopy.bandits import (
     HierarchicalTopK,
     SuccessiveEliminationTopK,
     TreeBandit,

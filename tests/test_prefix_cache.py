@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import PrefixCacheEnv, offline_optimal, run_cache
+from canopy.bandits import PrefixCacheEnv, offline_optimal, run_cache
 
 
 def _stream(seed, horizon=8000, shift_at=None):

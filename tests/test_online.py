@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import (
+from canopy.bandits import (
     TreeBandit,
     geometric_sigma,
     hierarchical_spread,
@@ -15,7 +15,7 @@ from oco.bandits import (
     run_hoo,
     run_hybrid,
 )
-from oco.bandits.tree import Node
+from canopy.bandits.tree import Node
 
 
 def test_play_is_unbiased_for_subtree_average():

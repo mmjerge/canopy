@@ -15,8 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
-from oco.bandits import PrefixTreeRouting, run_router
-from oco.bandits.bedrock import DEFAULT_PRICING, BedrockClient
+from canopy.bandits import PrefixTreeRouting, run_router
+from canopy.bandits.bedrock import DEFAULT_PRICING, BedrockClient
 
 SUBJECTS = [
     "elementary_mathematics", "abstract_algebra", "high_school_biology",

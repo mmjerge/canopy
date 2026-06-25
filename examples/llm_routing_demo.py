@@ -22,7 +22,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from oco.bandits import PrefixTreeRouting, make_routing_scenario, run_router
+from canopy.bandits import PrefixTreeRouting, make_routing_scenario, run_router
 
 BRANCHING, DEPTH, HORIZON = 4, 5, 20000  # 1024 prompts
 N_SEEDS = 8

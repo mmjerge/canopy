@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from oco.bandits.reasoning import success_rate
+from canopy.bandits.reasoning import success_rate
 
 SIGMA = 0.3
 SEEDS = 200

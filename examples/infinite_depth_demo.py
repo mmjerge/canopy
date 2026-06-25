@@ -17,7 +17,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from oco.bandits import TreeBandit, geometric_sigma, hierarchical_spread, run_hoo
+from canopy.bandits import TreeBandit, geometric_sigma, hierarchical_spread, run_hoo
 
 BRANCHING = 3
 HORIZON = 15000

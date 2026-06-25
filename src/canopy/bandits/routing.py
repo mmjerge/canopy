@@ -107,7 +107,7 @@ def make_routing_scenario(
 
     Returns ``(quality, costs)`` with ``quality`` of shape (2, branching**depth).
     """
-    from oco.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
+    from canopy.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
 
     n_leaves = branching**depth
     big = np.clip(

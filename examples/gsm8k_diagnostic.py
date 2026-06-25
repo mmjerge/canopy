@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 
-from oco.bandits.reasoning_llm import best_of_n, extract_answer, value_guided_search
+from canopy.bandits.reasoning_llm import best_of_n, extract_answer, value_guided_search
 
 
 def load_gsm8k(n: int):
@@ -38,7 +38,7 @@ def main() -> None:
     ap.add_argument("--final-rollouts", type=int, default=5)
     args = ap.parse_args()
 
-    from oco.bandits.bedrock import BedrockClient
+    from canopy.bandits.bedrock import BedrockClient
     client = BedrockClient(region=args.region, max_tokens=512)
     problems = load_gsm8k(args.n_problems)
 
@@ -52,7 +52,7 @@ def main() -> None:
     tally = {"best_of_n": 0, "vg_self": 0, "vg_oracle": 0}
     for i, (q, gold) in enumerate(problems):
         def oracle_value(rolls, _gold=gold):
-            from oco.bandits.reasoning_llm import _normalize
+            from canopy.bandits.reasoning_llm import _normalize
             return sum(extract_answer(t) == _normalize(_gold) for t in rolls) / max(1, len(rolls))
 
         bo = best_of_n(q, gold, generate, n=vg_calls)

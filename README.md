@@ -23,7 +23,7 @@ Optional extras: `--extra plot` (matplotlib charts), `--extra llm` (Bedrock rout
 
 ## Core idea
 
-* `TreeBandit` (`oco.bandits.tree`) — the multi-fidelity environment. `leaf_cost` vs
+* `TreeBandit` (`canopy.bandits.tree`) — the multi-fidelity environment. `leaf_cost` vs
   `probe_cost`; budgets are measured in **cost**. Scenarios: `from_hierarchical_gaussian`,
   `from_adversarial_spikes`, `from_piecewise_smooth`.
 * Two regimes: **pure exploration** (identify the top-k leaves at least cost) and
@@ -33,14 +33,14 @@ Optional extras: `--extra plot` (matplotlib charts), `--extra llm` (Bedrock rout
 
 | Module | Role |
 | --- | --- |
-| `oco.bandits.tree` | `TreeBandit` multi-fidelity environment |
-| `oco.bandits.topk` | `HierarchicalTopK`, `UniformTopK` (top-k identification) |
-| `oco.bandits.baselines` | `SuccessiveEliminationTopK` (strong structure-blind baseline) |
-| `oco.bandits.online` | regret mode: `run_hoo`, `run_adaptive(_variance)`, `run_fixed_depth`, `run_hybrid`, `run_local_lipschitz`; `detect_violations` |
-| `oco.bandits.maxmean` | noise-deconvolved high-probability bound on `max − mean` (certifies the bias term) |
-| `oco.bandits.rewards` | reward families (hierarchical-Gaussian, adversarial spikes, piecewise-smooth, violation) |
-| `oco.bandits.routing`, `oco.bandits.prefix_cache` | applied bandit instantiations (LLM routing, prefix-cache) |
-| `oco.bandits.exp3`, `oco.experts`, `oco.algorithms` | classical OCO/MAB baselines (Hazan) |
+| `canopy.bandits.tree` | `TreeBandit` multi-fidelity environment |
+| `canopy.bandits.topk` | `HierarchicalTopK`, `UniformTopK` (top-k identification) |
+| `canopy.bandits.baselines` | `SuccessiveEliminationTopK` (strong structure-blind baseline) |
+| `canopy.bandits.online` | regret mode: `run_hoo`, `run_adaptive(_variance)`, `run_fixed_depth`, `run_hybrid`, `run_local_lipschitz`; `detect_violations` |
+| `canopy.bandits.maxmean` | noise-deconvolved high-probability bound on `max − mean` (certifies the bias term) |
+| `canopy.bandits.rewards` | reward families (hierarchical-Gaussian, adversarial spikes, piecewise-smooth, violation) |
+| `canopy.bandits.routing`, `canopy.bandits.prefix_cache` | applied bandit instantiations (LLM routing, prefix-cache) |
+| `canopy.bandits.exp3`, `canopy.experts`, `canopy.algorithms` | classical OCO/MAB baselines (Hazan) |
 
 ## Key results (honest, reproducible)
 

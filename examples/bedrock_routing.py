@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import PrefixTreeRouting, run_router
-from oco.bandits.bedrock import BedrockClient, measure_quality_matrix
+from canopy.bandits import PrefixTreeRouting, run_router
+from canopy.bandits.bedrock import BedrockClient, measure_quality_matrix
 
 # 16 prompts -> a branching=4, depth=2 prefix tree (n_leaves = 16).
 PROMPTS = [

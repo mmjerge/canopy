@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from oco.bandits.tree import Node, TreeBandit
+from canopy.bandits.tree import Node, TreeBandit
 
 
 @dataclass
@@ -233,12 +233,12 @@ def run_adaptive_mgf(
     """Self-certifying adaptive expansion using the deconvolved empirical-MGF bound.
 
     Like :func:`run_adaptive_variance`, but the bias term is the *high-probability*
-    ``max - mean`` bound from :func:`oco.bandits.maxmean.mgf_bound_from_moments` rather
+    ``max - mean`` bound from :func:`canopy.bandits.maxmean.mgf_bound_from_moments` rather
     than the soft ``sigma_within * sqrt(2 log m)`` heuristic. Both the statistical radius
     and the bias bound are now data-driven and valid w.h.p. -- no assumed spread schedule
     and no light-tail heuristic. Per node we keep O(len(lambdas)) running MGF moments.
     """
-    from oco.bandits.maxmean import mgf_bound_from_moments
+    from canopy.bandits.maxmean import mgf_bound_from_moments
 
     if lambdas is None:
         lambdas = np.array([0.5, 1.0, 2.0, 4.0, 8.0])
@@ -646,7 +646,7 @@ class MultiscaleEdgeMap:
     def finest_ranges(self) -> list[tuple[int, int]]:
         """Leaf ranges of the flagged cells, keeping only the finest (smallest) per region.
 
-        Suitable to pass as ``relaxed_ranges`` to :class:`~oco.bandits.topk.HierarchicalTopK`
+        Suitable to pass as ``relaxed_ranges`` to :class:`~canopy.bandits.topk.HierarchicalTopK`
         so expensive evaluations concentrate on the localized edges.
         """
         n_leaves = self.leaf_score.size

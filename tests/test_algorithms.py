@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from oco.algorithms import OnlineGradientDescent, StronglyConvexOGD
+from canopy.algorithms import OnlineGradientDescent, StronglyConvexOGD
 
 
 def test_ogd_first_step():

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from oco.experts import Hedge, RandomizedWeightedMajority
+from canopy.experts import Hedge, RandomizedWeightedMajority
 
 
 def test_distribution_is_valid_probability():

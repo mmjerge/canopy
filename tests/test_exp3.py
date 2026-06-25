@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from oco.bandits import EXP3
+from canopy.bandits import EXP3
 
 
 def test_distribution_valid():

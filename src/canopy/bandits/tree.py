@@ -28,7 +28,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    from oco.bandits.rewards import SigmaSchedule
+    from canopy.bandits.rewards import SigmaSchedule
 
 
 @dataclass(frozen=True)
@@ -116,10 +116,10 @@ class TreeBandit:
         """Build a tree whose leaf means come from a hierarchical Gaussian diffusion.
 
         Each internal node's value equals the exact average of its subtree leaves. See
-        :mod:`oco.bandits.rewards`. If ``sigma`` is omitted, a geometric schedule
+        :mod:`canopy.bandits.rewards`. If ``sigma`` is omitted, a geometric schedule
         ``0.4 * 0.5 ** level`` is used.
         """
-        from oco.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
+        from canopy.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
 
         rng = rng or np.random.default_rng()
         sigma = sigma or geometric_sigma()
@@ -145,9 +145,9 @@ class TreeBandit:
         """Build a tree with a flat baseline and randomly-placed high-reward spikes.
 
         Subtree averages are nearly uninformative here -- the adversarial case where
-        trusting the tree structure can hurt. See :mod:`oco.bandits.rewards`.
+        trusting the tree structure can hurt. See :mod:`canopy.bandits.rewards`.
         """
-        from oco.bandits.rewards import adversarial_spike_leaf_means
+        from canopy.bandits.rewards import adversarial_spike_leaf_means
 
         rng = rng or np.random.default_rng()
         leaf_means = adversarial_spike_leaf_means(branching, depth, n_spikes, rng=rng)
@@ -171,9 +171,9 @@ class TreeBandit:
         """Build a mostly-smooth tree with a finite number of sharp jump discontinuities.
 
         Smooth base + ``n_jumps`` localized cliffs (the piecewise-Lipschitz / dispersion
-        setting). See :mod:`oco.bandits.rewards`.
+        setting). See :mod:`canopy.bandits.rewards`.
         """
-        from oco.bandits.rewards import piecewise_smooth_leaf_means
+        from canopy.bandits.rewards import piecewise_smooth_leaf_means
 
         rng = rng or np.random.default_rng()
         leaf_means = piecewise_smooth_leaf_means(

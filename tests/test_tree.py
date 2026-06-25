@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from oco.bandits import TreeBandit
-from oco.bandits.tree import Node
+from canopy.bandits import TreeBandit
+from canopy.bandits.tree import Node
 
 
 def test_structure_basic():

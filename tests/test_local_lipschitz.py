@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from oco.bandits import TreeBandit, lipschitz_spread, run_hoo, run_local_lipschitz
-from oco.bandits.rewards import heterogeneous_smoothness_leaf_means
+from canopy.bandits import TreeBandit, lipschitz_spread, run_hoo, run_local_lipschitz
+from canopy.bandits.rewards import heterogeneous_smoothness_leaf_means
 
 
 def test_runs_and_bounded():

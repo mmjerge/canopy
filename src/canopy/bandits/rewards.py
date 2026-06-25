@@ -8,7 +8,7 @@ shrinks with depth. Two consequences make it the natural model for this problem:
    because the children of any node average back to that node by construction.
 2. The per-level perturbation scale ``sigma(level)`` directly yields a high-probability
    ``spread`` bound -- the maximum deviation of a leaf from an ancestor's average --
-   which is precisely what :class:`~oco.bandits.topk.HierarchicalTopK` needs to prune
+   which is precisely what :class:`~canopy.bandits.topk.HierarchicalTopK` needs to prune
    soundly. When ``sigma`` decays with depth, subtree averages are predictive and the
    hierarchical search wins; when ``sigma`` is large/flat, the structure carries little
    information and the method degrades gracefully.

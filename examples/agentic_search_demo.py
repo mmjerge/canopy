@@ -19,7 +19,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 
-from oco.bandits.agentic import (
+from canopy.bandits.agentic import (
     GridWorld,
     best_of_n_plan,
     rollout_policy_plan,

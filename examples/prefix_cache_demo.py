@@ -20,7 +20,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from oco.bandits import PrefixCacheEnv, run_cache
+from canopy.bandits import PrefixCacheEnv, run_cache
 
 HORIZON = 20000
 N_SEEDS = 6

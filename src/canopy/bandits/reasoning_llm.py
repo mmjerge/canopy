@@ -1,11 +1,11 @@
 """Real-LLM reasoning-tree search harness: value-guided tree search vs. best-of-N.
 
 This is the generator-agnostic core for testing -- on a real benchmark (e.g. GSM8K) -- the
-claim from ``oco.bandits.reasoning``: that value-guided (edge-following) test-time search
+claim from ``canopy.bandits.reasoning``: that value-guided (edge-following) test-time search
 finds correct answers at lower compute than best-of-N. It is deliberately decoupled from any
 specific model: every method takes a ``generate`` callable
 ``(prompt, max_tokens, seed) -> text``, so it runs against a mock LLM in tests and against a
-real model (e.g. ``oco.bandits.bedrock.BedrockClient``) in ``examples/gsm8k_reasoning_search.py``.
+real model (e.g. ``canopy.bandits.bedrock.BedrockClient``) in ``examples/gsm8k_reasoning_search.py``.
 
 Two strategies, compared at an equal budget of generation calls:
 
