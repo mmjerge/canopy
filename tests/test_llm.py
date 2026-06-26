@@ -7,6 +7,7 @@ import types
 import numpy as np
 
 from canopy.llm import (
+    AnthropicClient,
     BedrockClient,
     LLMClient,
     MockLLMClient,
@@ -40,6 +41,7 @@ def test_clients_satisfy_protocol():
     assert isinstance(MockLLMClient(), LLMClient)
     assert isinstance(BedrockClient(runtime=object()), LLMClient)
     assert isinstance(OpenAIClient(client=object()), LLMClient)
+    assert isinstance(AnthropicClient(client=object()), LLMClient)
 
 
 def test_measure_quality_matrix_shapes_and_cost():
@@ -133,3 +135,23 @@ def test_bedrock_client_parses_response():
     assert runtime.last["modelId"] == "model-x"
     assert runtime.last["inferenceConfig"]["maxTokens"] == 128
     assert runtime.last["inferenceConfig"]["temperature"] == 0.7
+
+
+def test_anthropic_client_parses_response():
+    calls = {}
+
+    def create(**kwargs):
+        calls.update(kwargs)
+        block = types.SimpleNamespace(text="claude says hi")
+        usage = types.SimpleNamespace(input_tokens=9, output_tokens=4)
+        return types.SimpleNamespace(content=[block], usage=usage)
+
+    fake = types.SimpleNamespace(messages=types.SimpleNamespace(create=create))
+    client = AnthropicClient(client=fake, pricing={"claude-x": (3.0, 15.0)})
+    text, in_tok, out_tok = client.generate("claude-x", "hi", temperature=0.2, max_tokens=32)
+    assert (text, in_tok, out_tok) == ("claude says hi", 9, 4)
+    assert calls["model"] == "claude-x"
+    assert calls["messages"] == [{"role": "user", "content": "hi"}]
+    assert calls["max_tokens"] == 32
+    assert calls["temperature"] == 0.2
+    assert client.price_per_1k("claude-x") == (3.0, 15.0)
