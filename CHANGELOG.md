@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contributor docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and this
   changelog.
 - Type checking (mypy) and test coverage (pytest-cov) with a 90% CI gate.
+- Opt-in PyPI release workflow (`.github/workflows/release.yml`) using OIDC trusted
+  publishing; builds always, publishes only on a GitHub Release or manual dispatch.
 
 ### Changed
 
