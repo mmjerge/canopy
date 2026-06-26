@@ -67,3 +67,28 @@ Please keep new code covered.
 Conventional-style prefixes are used (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`,
 `refactor:`, `style:`). Keep the subject under ~72 characters and use the body to
 explain the what and why.
+
+## Releasing (maintainers)
+
+Publishing to PyPI is **opt-in** and handled by `.github/workflows/release.yml`. It
+always builds and `twine check`s the distribution; it only uploads when you ask it to.
+
+One-time setup (before the first publish):
+
+1. On PyPI (and optionally TestPyPI), configure a **trusted publisher** (OIDC) for this
+   repository and the `release.yml` workflow — no API tokens are stored.
+2. In the repo settings, create the `pypi` (and optionally `testpypi`) **environments**
+   to match the workflow's `environment:` names.
+
+To cut a release:
+
+1. Bump `version` in `pyproject.toml` and update `CHANGELOG.md`.
+2. Tag and push, then publish a **GitHub Release** for that tag. This triggers the
+   workflow, which builds and publishes to PyPI.
+
+Alternatively, trigger the workflow manually (**Actions → Release → Run workflow**) and
+choose a target:
+
+- `none` — build and check only (a dry run; nothing is uploaded).
+- `testpypi` — publish to TestPyPI.
+- `pypi` — publish to PyPI.
