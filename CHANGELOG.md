@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type checking (mypy) and test coverage (pytest-cov) with a 90% CI gate.
 - Opt-in PyPI release workflow (`.github/workflows/release.yml`) using OIDC trusted
   publishing; builds always, publishes only on a GitHub Release or manual dispatch.
+- Property-based tests (Hypothesis) for the tree-bandit invariants and example smoke
+  tests; `CITATION.cff`, `.editorconfig`, and a `Makefile` of common dev tasks.
+- CI: Python 3.13 in the matrix, a minimum-dependency-floor job, run-cancellation
+  concurrency, Codecov upload, pre-commit.ci config, and CodeQL + dependency-review
+  workflows (gated on public visibility).
 
 ### Changed
 

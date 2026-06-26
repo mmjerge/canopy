@@ -1,0 +1,21 @@
+name: Dependency Review
+
+# Flags vulnerable or disallowed dependencies introduced in a pull request. Relies on
+# the GitHub dependency graph (free on public repos), so it is gated on visibility and
+# stays dormant while the repo is private.
+on:
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    if: ${{ github.event.repository.visibility == 'public' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
