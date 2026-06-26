@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+title: "Canopy: exploiting smooth tree priors for bandits"
+message: "If you use this software, please cite it using these metadata."
+type: software
+authors:
+  - family-names: Jerge
+    given-names: Michael
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/mmjerge/canopy"
+abstract: >-
+  Multi-fidelity tree bandits with regret-optimal search and fixed-budget
+  identification: when does trusting a smooth tree prior let you identify good
+  leaves, or minimize regret, at lower cost than a structure-blind baseline?
+keywords:
+  - bandits
+  - multi-fidelity
+  - online-learning
+  - test-time-compute
+  - llm-routing
