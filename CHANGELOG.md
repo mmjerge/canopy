@@ -10,9 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `canopy.llm`: provider-agnostic LLM client layer with an `LLMClient` protocol,
-  `BedrockClient`, `OpenAIClient`, a `MockLLMClient`, the `as_generate_fn` adapter to the
-  reasoning-search harness, and a Protocol-typed `measure_quality_matrix`.
-- `openai` optional extra.
+  `BedrockClient`, `OpenAIClient`, `AnthropicClient`, a `MockLLMClient`, the
+  `as_generate_fn` adapter to the reasoning-search harness, and a Protocol-typed
+  `measure_quality_matrix`.
+- `openai` and `anthropic` optional extras.
 - Project-health files: `dependabot.yml`, issue/PR templates, `py.typed` marker, and
   README badges.
 - Contributor docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and this

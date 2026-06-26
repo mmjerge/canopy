@@ -20,6 +20,7 @@ Most demos need only `numpy`. Some need optional extras (see `pyproject.toml`):
 - `plot` — `matplotlib`, for the demos that render charts.
 - `llm` — `boto3`, for demos that call Amazon Bedrock.
 - `openai` — `openai`, to use `canopy.llm.OpenAIClient` (set `OPENAI_API_KEY`) in place of Bedrock.
+- `anthropic` — `anthropic`, to use `canopy.llm.AnthropicClient` (set `ANTHROPIC_API_KEY`).
 - `bench` — `boto3` + `datasets`, for demos that pull a real benchmark (MMLU, GSM8K).
 
 The `llm`/`bench` demos make real, paid model calls and require AWS credentials with
