@@ -375,16 +375,16 @@ plot = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=24.8" },
+    { name = "black", marker = "extra == 'dev'", specifier = ">=26.5.1" },
     { name = "boto3", marker = "extra == 'bench'", specifier = ">=1.34" },
     { name = "boto3", marker = "extra == 'llm'", specifier = ">=1.34" },
     { name = "datasets", marker = "extra == 'bench'", specifier = ">=2.18" },
-    { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.0" },
+    { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.3.0" },
     { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.10" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.6.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.20" },
