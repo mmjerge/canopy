@@ -1,0 +1,29 @@
+name: CodeQL
+
+# Static security analysis. CodeQL is free on public repositories (and requires
+# GitHub Advanced Security on private ones), so the job is gated on visibility:
+# it stays dormant (skipped) while the repo is private and activates automatically
+# once it is made public.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  analyze:
+    if: ${{ github.event.repository.visibility == 'public' }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3

@@ -1,6 +1,12 @@
 # Pre-commit hooks for canopy.
 # Install once with:  pre-commit install
 # Run on all files:   pre-commit run --all-files
+ci:
+  # pre-commit.ci runs hooks in isolated envs without the project installed, so the
+  # local (system) mypy hook can't resolve imports there; run mypy in GitHub Actions.
+  skip: [mypy]
+  autoupdate_schedule: monthly
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
