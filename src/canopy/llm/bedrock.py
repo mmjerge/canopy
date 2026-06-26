@@ -11,6 +11,8 @@ also be enabled in the Bedrock console.
 
 from __future__ import annotations
 
+from typing import Any
+
 from canopy.llm.base import Generation
 
 # Approximate USD price per 1K tokens (input, output); override as needed / per region.
@@ -50,7 +52,7 @@ class BedrockClient:
         role_arn: str | None = None,
         max_tokens: int = 512,
         pricing: dict[str, tuple[float, float]] | None = None,
-        runtime: object | None = None,
+        runtime: Any | None = None,
     ) -> None:
         self.max_tokens = max_tokens
         self.pricing = pricing or DEFAULT_PRICING

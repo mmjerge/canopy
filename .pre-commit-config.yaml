@@ -21,3 +21,13 @@ repos:
     rev: 7.0.0
     hooks:
       - id: flake8
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: ["src/canopy"]

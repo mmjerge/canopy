@@ -7,6 +7,13 @@ dist/
 build/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # uv
 # (uv.lock IS committed; the venv is not)
