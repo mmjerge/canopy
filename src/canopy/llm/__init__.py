@@ -4,11 +4,12 @@ The :class:`LLMClient` Protocol is the contract; concrete providers implement it
 imported lazily (their SDKs are optional extras). Everything downstream depends on the
 Protocol, so swapping providers needs no algorithm changes.
 
-    from canopy.llm import BedrockClient, OpenAIClient, measure_quality_matrix
+    from canopy.llm import BedrockClient, OpenAIClient, AnthropicClient, measure_quality_matrix
 
 ``DEFAULT_PRICING`` re-exports the Bedrock price table for backward compatibility.
 """
 
+from canopy.llm.anthropic import AnthropicClient
 from canopy.llm.base import (
     GenerateFn,
     Generation,
@@ -29,5 +30,6 @@ __all__ = [
     "MockLLMClient",
     "BedrockClient",
     "OpenAIClient",
+    "AnthropicClient",
     "DEFAULT_PRICING",
 ]
