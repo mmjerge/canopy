@@ -56,12 +56,18 @@ def main() -> None:
     ap.add_argument("--n-steps", type=int, default=4)
     ap.add_argument("--rollouts", type=int, default=2)
     ap.add_argument("--final-rollouts", type=int, default=5)
+    ap.add_argument("--max-calls", type=int, default=None, help="hard cap on API calls")
+    ap.add_argument("--max-spend", type=float, default=None, help="hard cap on est. USD spend")
+    ap.add_argument("--cache", default="examples/.cache/gsm8k_reasoning.jsonl")
     args = ap.parse_args()
 
     try:
-        from canopy.llm import BedrockClient
+        from canopy.llm import BedrockClient, CachingLLMClient
 
-        client = BedrockClient(region=args.region, max_tokens=512)
+        base = BedrockClient(region=args.region, max_tokens=512)
+        client = CachingLLMClient(
+            base, args.cache, max_calls=args.max_calls, max_spend_usd=args.max_spend
+        )
         problems = load_gsm8k(args.n_problems)
     except Exception as e:  # noqa: BLE001 -- missing extras / creds / model access
         print(
@@ -82,17 +88,25 @@ def main() -> None:
     bo_correct = vg_correct = 0
     bo_calls = vg_calls = 0
     bo_tokens = vg_tokens = 0
+    from canopy.llm import BudgetError
+
+    solved = 0
     for i, (q, gold) in enumerate(problems):
-        bo = best_of_n(q, gold, generate, n=bo_n)
-        vg = value_guided_search(
-            q,
-            gold,
-            generate,
-            branching=args.branching,
-            n_steps=args.n_steps,
-            rollouts=args.rollouts,
-            final_rollouts=args.final_rollouts,
-        )
+        try:
+            bo = best_of_n(q, gold, generate, n=bo_n)
+            vg = value_guided_search(
+                q,
+                gold,
+                generate,
+                branching=args.branching,
+                n_steps=args.n_steps,
+                rollouts=args.rollouts,
+                final_rollouts=args.final_rollouts,
+            )
+        except BudgetError as e:
+            print(f"\n[budget stop] {e}  (completed {solved}/{len(problems)} problems)")
+            break
+        solved += 1
         bo_correct += bo.correct
         vg_correct += vg.correct
         bo_calls += bo.budget.calls
@@ -104,7 +118,7 @@ def main() -> None:
             f"value-guided={vg.answer} ({vg.correct})"
         )
 
-    n = len(problems)
+    n = max(1, solved)
     print(f"\nGSM8K ({n} problems), matched budget ~{bo_n} calls, model {args.model}")
     print(
         f"  best-of-N      : acc {bo_correct/n:.2f}   avg calls {bo_calls/n:.1f}   "
@@ -120,6 +134,7 @@ def main() -> None:
         f"  acc diff (vg - bo): {diff:+.3f}  (~{abs(diff) / se:.1f} SE; "
         f"n={n} is small, treat |diff| < ~{2 * se:.2f} as within noise)"
     )
+    print(f"  budget: {client.stats()}")
 
 
 if __name__ == "__main__":

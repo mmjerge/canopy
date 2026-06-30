@@ -15,12 +15,13 @@ Caches per-(trim, question) results to prompt_optimization.npz.
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import numpy as np
 
 from canopy.bandits import PrefixTreeRouting, run_router
-from canopy.llm import BedrockClient
+from canopy.llm import BedrockClient, BudgetError, CachingLLMClient
 
 SUBJECTS = [
     "elementary_mathematics",
@@ -77,34 +78,56 @@ def parse_letter(text: str) -> str:
 
 
 def main() -> None:
-    cache = Path(__file__).parent / "prompt_optimization.npz"
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--region", default="us-east-1")
+    ap.add_argument("--max-calls", type=int, default=None, help="hard cap on API calls")
+    ap.add_argument("--max-spend", type=float, default=None, help="hard cap on est. USD spend")
+    ap.add_argument("--cache", default="examples/.cache/prompt_optimization.jsonl")
+    args = ap.parse_args()
+
+    npz_cache = Path(__file__).parent / "prompt_optimization.npz"
     items = load_questions()
     n = len(items)
-    if cache.exists():
-        data = np.load(cache, allow_pickle=True)
+    if npz_cache.exists():
+        data = np.load(npz_cache, allow_pickle=True)
         quality, in_tokens = data["quality"], data["in_tokens"]
-        print(f"loaded cached results from {cache.name}")
+        print(f"loaded cached results from {npz_cache.name}")
     else:
-        client = BedrockClient(region="us-east-1", max_tokens=8)
+        client = CachingLLMClient(
+            BedrockClient(region=args.region, max_tokens=8),
+            args.cache,
+            max_calls=args.max_calls,
+            max_spend_usd=args.max_spend,
+        )
         quality = np.zeros((N_TRIM, n))
         in_tokens = np.zeros((N_TRIM, n))
         fails = 0
-        for lvl in range(N_TRIM):
-            for qi, (q, choices, ans) in enumerate(items):
-                try:
-                    text, it, _ = client.generate(MODEL, build_prompt(q, choices, lvl))
-                    quality[lvl, qi] = 1.0 if parse_letter(text) == ans else 0.0
-                    in_tokens[lvl, qi] = it
-                except Exception as e:  # noqa: BLE001
-                    fails += 1
-                    if fails <= 1:
-                        print(f"  call failed: {type(e).__name__}: {str(e)[:110]}")
-            print(f"  trim {lvl}: acc={quality[lvl].mean():.2f} in_tok={in_tokens[lvl].mean():.1f}")
+        try:
+            for lvl in range(N_TRIM):
+                for qi, (q, choices, ans) in enumerate(items):
+                    try:
+                        text, it, _ = client.generate(MODEL, build_prompt(q, choices, lvl))
+                        quality[lvl, qi] = 1.0 if parse_letter(text) == ans else 0.0
+                        in_tokens[lvl, qi] = it
+                    except BudgetError:
+                        raise
+                    except Exception as e:  # noqa: BLE001
+                        fails += 1
+                        if fails <= 1:
+                            print(f"  call failed: {type(e).__name__}: {str(e)[:110]}")
+                print(
+                    f"  trim {lvl}: acc={quality[lvl].mean():.2f} "
+                    f"in_tok={in_tokens[lvl].mean():.1f}"
+                )
+        except BudgetError as e:
+            print(f"\n[budget stop] {e}  Not caching partial results; refine caps and re-run.")
+            return
         if fails > 0.2 * N_TRIM * n:
             print(f"ABORTING: {fails} failed calls (creds/access). Not caching.")
             return
-        np.savez(cache, quality=quality, in_tokens=in_tokens)
-        print(f"saved results to {cache.name}")
+        np.savez(npz_cache, quality=quality, in_tokens=in_tokens)
+        print(f"saved results to {npz_cache.name}")
+        print(f"  budget: {client.stats()}")
 
     costs = in_tokens.mean(axis=1)
     rel_costs = costs / costs.max()

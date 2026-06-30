@@ -50,3 +50,34 @@ def test_router_beats_fixed_policies_and_saves_cost():
     assert np.mean(router) < 0.5 * np.mean(best_single)
     # ... and spends less than always routing to the big model.
     assert np.mean(router_cost) < np.mean(big_cost)
+
+
+def test_flat_baseline_learns_and_beats_random():
+    horizon = 15000
+    flat, rand = [], []
+    for seed in range(5):
+        env = _env(seed)
+        f = run_router(env, horizon, np.random.default_rng(300 + seed), strategy="flat")
+        env2 = _env(seed)
+        rd = run_router(env2, horizon, np.random.default_rng(300 + seed), strategy="random")
+        flat.append(f.final_regret)
+        rand.append(rd.final_regret)
+    # the structure-blind online learner still learns: lower regret than routing at random.
+    assert np.mean(flat) < np.mean(rand)
+
+
+def test_hierarchical_beats_flat_when_strengths_are_regional():
+    # With genuinely complementary regional strengths, the tree-structured learner should
+    # outperform the structure-blind one (which commits to a single global model).
+    horizon = 15000
+    hier, flat = [], []
+    for seed in range(5):
+        env = _env(seed)
+        h = run_router(
+            env, horizon, np.random.default_rng(400 + seed), strategy="hierarchical", resolution=2
+        )
+        env2 = _env(seed)
+        f = run_router(env2, horizon, np.random.default_rng(400 + seed), strategy="flat")
+        hier.append(h.final_regret)
+        flat.append(f.final_regret)
+    assert np.mean(hier) < np.mean(flat)

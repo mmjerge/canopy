@@ -144,14 +144,22 @@ def run_router(
     Strategies:
         "hierarchical" -- learn per-region per-model quality with UCB and route by the
             optimistic net utility (uses the prefix-tree generalization at ``resolution``).
+        "flat"         -- structure-blind online UCB over models with a single global estimate
+            per model (the honest learning baseline: same information, no tree structure).
         "best_single"  -- always use the single model with the best average net utility
-            (the strongest fixed-routing baseline, computed from the truth).
-        "all_largest"  -- always use the highest-quality model (ignores cost).
+            (a truth-based reference: computed from the ground-truth utility, no exploration).
+        "all_largest"  -- always use the highest-quality model, truth-based, ignores cost.
+        "oracle"       -- per-prompt best model, truth-based upper bound.
         "random"       -- route uniformly at random.
+
+    Only "hierarchical" and "flat" actually learn online; the others are references computed
+    from the ground truth and pay no exploration cost.
     """
     n_regions = env.branching**resolution
     counts = np.zeros((env.n_models, n_regions))
     sums = np.zeros((env.n_models, n_regions))
+    g_counts = np.zeros(env.n_models)  # structure-blind (flat) per-model counts
+    g_sums = np.zeros(env.n_models)
 
     best_single = int(np.argmax(env.utility.mean(axis=1)))
     all_largest = int(np.argmax(env.quality.mean(axis=1)))
@@ -175,6 +183,18 @@ def run_router(
                 if val > best_val:
                     best_val, best_m = val, m
             model = best_m
+        elif strategy == "flat":
+            best_m, best_val = 0, -np.inf
+            for m in range(env.n_models):
+                n = g_counts[m]
+                if n == 0:
+                    val = np.inf
+                else:
+                    qhat = g_sums[m] / n
+                    val = (qhat - env.lam * env.costs[m]) + c * np.sqrt(2.0 * np.log(t + 2) / n)
+                if val > best_val:
+                    best_val, best_m = val, m
+            model = best_m
         elif strategy == "best_single":
             model = best_single
         elif strategy == "all_largest":
@@ -189,6 +209,9 @@ def run_router(
             r = env.region(leaf, resolution)
             counts[model, r] += 1
             sums[model, r] += q
+        elif strategy == "flat":
+            g_counts[model] += 1
+            g_sums[model] += q
 
         cum += float(env.oracle_utility[leaf] - env.utility[model, leaf])
         cum_regret[t] = cum

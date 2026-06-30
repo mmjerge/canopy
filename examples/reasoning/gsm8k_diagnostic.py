@@ -37,11 +37,19 @@ def main() -> None:
     ap.add_argument("--n-steps", type=int, default=3)
     ap.add_argument("--rollouts", type=int, default=3)
     ap.add_argument("--final-rollouts", type=int, default=5)
+    ap.add_argument("--max-calls", type=int, default=None, help="hard cap on API calls")
+    ap.add_argument("--max-spend", type=float, default=None, help="hard cap on est. USD spend")
+    ap.add_argument("--cache", default="examples/.cache/gsm8k_diagnostic.jsonl")
     args = ap.parse_args()
 
-    from canopy.llm import BedrockClient
+    from canopy.llm import BedrockClient, BudgetError, CachingLLMClient
 
-    client = BedrockClient(region=args.region, max_tokens=512)
+    client = CachingLLMClient(
+        BedrockClient(region=args.region, max_tokens=512),
+        args.cache,
+        max_calls=args.max_calls,
+        max_spend_usd=args.max_spend,
+    )
     problems = load_gsm8k(args.n_problems)
 
     generate = as_generate_fn(client, args.model, temperature=0.7)
@@ -50,6 +58,7 @@ def main() -> None:
     vg_calls = args.n_steps * (args.branching * (1 + args.rollouts)) + args.final_rollouts
 
     tally = {"best_of_n": 0, "vg_self": 0, "vg_oracle": 0}
+    solved = 0
     for i, (q, gold) in enumerate(problems):
 
         def oracle_value(rolls, _gold=gold):
@@ -57,26 +66,31 @@ def main() -> None:
 
             return sum(extract_answer(t) == _normalize(_gold) for t in rolls) / max(1, len(rolls))
 
-        bo = best_of_n(q, gold, generate, n=vg_calls)
-        vs = value_guided_search(
-            q,
-            gold,
-            generate,
-            args.branching,
-            args.n_steps,
-            args.rollouts,
-            final_rollouts=args.final_rollouts,
-        )
-        vo = value_guided_search(
-            q,
-            gold,
-            generate,
-            args.branching,
-            args.n_steps,
-            args.rollouts,
-            value_fn=oracle_value,
-            final_rollouts=args.final_rollouts,
-        )
+        try:
+            bo = best_of_n(q, gold, generate, n=vg_calls)
+            vs = value_guided_search(
+                q,
+                gold,
+                generate,
+                args.branching,
+                args.n_steps,
+                args.rollouts,
+                final_rollouts=args.final_rollouts,
+            )
+            vo = value_guided_search(
+                q,
+                gold,
+                generate,
+                args.branching,
+                args.n_steps,
+                args.rollouts,
+                value_fn=oracle_value,
+                final_rollouts=args.final_rollouts,
+            )
+        except BudgetError as e:
+            print(f"\n[budget stop] {e}  (completed {solved}/{len(problems)} problems)")
+            break
+        solved += 1
         tally["best_of_n"] += bo.correct
         tally["vg_self"] += vs.correct
         tally["vg_oracle"] += vo.correct
@@ -86,10 +100,11 @@ def main() -> None:
             flush=True,
         )
 
-    n = len(problems)
-    print(f"\nGSM8K {n} problems, matched budget ~{vg_calls} calls, model {args.model}")
+    n = max(1, solved)
+    print(f"\nGSM8K {solved} problems, matched budget ~{vg_calls} calls, model {args.model}")
     for name in ("best_of_n", "vg_self", "vg_oracle"):
         print(f"  {name:10s} acc {tally[name]/n:.2f}")
+    print(f"  budget: {client.stats()}")
 
 
 if __name__ == "__main__":

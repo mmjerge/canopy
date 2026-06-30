@@ -46,6 +46,15 @@ from canopy.bandits.agentic import (
     rollout_policy_plan,
     success_rates,
 )
+from canopy.bandits.agentic_llm import (
+    AgentEnv,
+    EpisodeResult,
+    ReplayCloneEnv,
+    StepEnv,
+    best_of_n_episodes,
+    value_guided_episode,
+)
+from canopy.bandits.agentic_llm import compare_matched_budget as compare_matched_budget_agent
 from canopy.bandits.rewards import (
     adversarial_spike_leaf_means,
     geometric_sigma,
@@ -111,4 +120,11 @@ __all__ = [
     "rollout_policy_plan",
     "compare_matched_budget",
     "success_rates",
+    "AgentEnv",
+    "EpisodeResult",
+    "ReplayCloneEnv",
+    "StepEnv",
+    "best_of_n_episodes",
+    "value_guided_episode",
+    "compare_matched_budget_agent",
 ]
