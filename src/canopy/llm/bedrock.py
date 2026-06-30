@@ -56,6 +56,7 @@ class BedrockClient:
     ) -> None:
         self.max_tokens = max_tokens
         self.pricing = pricing or DEFAULT_PRICING
+        self.region = region
         if runtime is not None:
             self.runtime = runtime
             return
@@ -95,10 +96,100 @@ class BedrockClient:
             messages=[{"role": "user", "content": [{"text": prompt}]}],
             inferenceConfig=cfg,
         )
-        text = resp["output"]["message"]["content"][0]["text"]
+        blocks = resp.get("output", {}).get("message", {}).get("content", [])
+        # Concatenate all text blocks; reasoning models (e.g. DeepSeek R1) also emit
+        # non-text "reasoningContent" blocks, which carry no "text" key and are skipped.
+        text = "".join(b["text"] for b in blocks if isinstance(b, dict) and "text" in b)
         usage = resp["usage"]
         return text, int(usage["inputTokens"]), int(usage["outputTokens"])
 
     def price_per_1k(self, model_id: str) -> tuple[float, float]:
         """Per-1K-token ``(input, output)`` USD price for ``model_id`` (0 if unknown)."""
         return self.pricing.get(model_id, (0.001, 0.001))
+
+    def list_text_models(self, only_available: bool = True) -> list[str]:
+        """Discover invokable text model / inference-profile IDs in this region.
+
+        Returns cross-region inference-profile IDs (directly usable as ``modelId`` in the
+        Converse API) plus on-demand foundation text models. When ``only_available`` is set
+        (the default), each candidate is checked with ``GetFoundationModelAvailability`` and
+        kept only if it is authorized, entitled, and available in this region; this avoids
+        attempting catalog IDs that would raise ``ResourceNotFoundException`` (not in region /
+        not entitled) or ``AccessDeniedException`` (not authorized). Requires the ``bedrock``
+        (control-plane) permissions; if a check cannot be performed, the candidate is kept and
+        left for the runtime call to resolve.
+        """
+        import boto3
+
+        ctrl = boto3.client("bedrock", region_name=self.region)
+        # (invoke_id, base_model_id) -- base id is what availability is checked against.
+        candidates: list[tuple[str, str]] = []
+        try:
+            resp = ctrl.list_inference_profiles(maxResults=100)
+            for prof in resp.get("inferenceProfileSummaries", []):
+                if prof.get("status", "ACTIVE") != "ACTIVE":
+                    continue
+                pid = prof["inferenceProfileId"]
+                models = prof.get("models") or []
+                base = pid
+                if models:
+                    arn = models[0].get("modelArn", "")
+                    base = arn.split("/")[-1] or pid
+                candidates.append((pid, base))
+        except Exception:  # noqa: BLE001 -- control-plane perms may be missing; fall back
+            pass
+        try:
+            fm = ctrl.list_foundation_models(byOutputModality="TEXT")
+            for m in fm.get("modelSummaries", []):
+                if m.get("modelLifecycle", {}).get("status") != "ACTIVE":
+                    continue
+                if "ON_DEMAND" not in m.get("inferenceTypesSupported", []):
+                    continue
+                if "TEXT" not in m.get("inputModalities", []):
+                    continue
+                candidates.append((m["modelId"], m["modelId"]))
+        except Exception:  # noqa: BLE001
+            pass
+
+        seen: set[str] = set()
+        uniq: list[tuple[str, str]] = []
+        for inv, base in candidates:
+            if inv not in seen:
+                seen.add(inv)
+                uniq.append((inv, base))
+        if not only_available:
+            return [inv for inv, _ in uniq]
+
+        out: list[str] = []
+        for inv, base in uniq:
+            av = self.model_availability(base)
+            if av is None:
+                out.append(inv)  # could not determine; let the runtime call decide
+            elif (
+                av["authorizationStatus"] == "AUTHORIZED"
+                and av["regionAvailability"] == "AVAILABLE"
+                and av["entitlementAvailability"] == "AVAILABLE"
+            ):
+                out.append(inv)
+        return out
+
+    def model_availability(self, model_id: str) -> dict[str, str] | None:
+        """Return authorization / entitlement / region status for ``model_id``.
+
+        Returns a dict with ``authorizationStatus``, ``entitlementAvailability``, and
+        ``regionAvailability`` (each an enum string), or ``None`` if the status cannot be
+        determined (e.g. missing ``bedrock:GetFoundationModelAvailability`` permission, or the
+        ID is an inference profile that the API does not resolve).
+        """
+        import boto3
+
+        ctrl = boto3.client("bedrock", region_name=self.region)
+        try:
+            r = ctrl.get_foundation_model_availability(modelId=model_id)
+        except Exception:  # noqa: BLE001
+            return None
+        return {
+            "authorizationStatus": r.get("authorizationStatus", ""),
+            "entitlementAvailability": r.get("entitlementAvailability", ""),
+            "regionAvailability": r.get("regionAvailability", ""),
+        }

@@ -1,55 +1,44 @@
 """Graceful degradation in the number of Lipschitz violations (the value of structure).
 
-Earlier framing (cost to certify vs K) was confounded: it reduced to generic best-arm
-complexity (cost grows with the number of near-optimal arms) and gave the tree structure no
-leverage. This is the corrected, structure-vs-blind experiment that actually isolates the
-effect of violations.
+Multi-fidelity regime where the tree provably pays: cheap biased internal probes
+(probe_cost << leaf_cost) and a tight identification budget. The number of violations is the
+number of ``adversarial_spike`` spikes (the canonical "subtree averages are uninformative"
+axis). Three methods at a fixed tight budget:
 
-Regime: the multi-fidelity setting where the tree *provably* pays -- cheap biased internal
-probes (probe_cost << leaf_cost) and a tight identification budget (per the README
-benchmark). The number of Lipschitz violations is the number of ``adversarial_spike``
-spikes, the repo's canonical "subtree averages are uninformative" axis: more spikes => the
-coarse probes the descent relies on are more misleading.
+  * assume-smooth -- HierarchicalTopK trusting one smoothness bound (misled by spikes);
+  * blind         -- SuccessiveEliminationTopK (no structure; can't afford enough leaves);
+  * hybrid        -- detect the spike cells from data, then relax the smooth bound there.
 
-Three methods, accuracy at a fixed (tight) cost budget:
-  * Hier (assume-smooth) -- HierarchicalTopK trusting a single smoothness bound; misled by
-    spikes, erratic.
-  * blind -- SuccessiveEliminationTopK; ignores structure, can't afford enough leaves at a
-    tight budget.
-  * hybrid (detect + relax) -- run ``detect_violations`` to find the spike cells from data,
-    then HierarchicalTopK that uses the smooth bound everywhere EXCEPT those cells (where it
-    falls back to leaf-level certification). This is the data-driven method that assumes no
-    constants and no jump count a priori.
+The hybrid degrades gracefully with the violation count and dominates both baselines. Lines
+show mean top-1 accuracy over seeds with a shaded 95% CI band.
 
-Result: the hybrid degrades *gracefully* with the number of violations -- accuracy ~1 when
-violations are few, declining smoothly toward the structure-blind floor as they proliferate
--- and strictly dominates both pure assume-smooth and blind across the whole range. That is
-the honest realization of "fewer violations => better, gracefully worsening."
-
-Run with:  uv run python examples/tree_bandits/violation_regret_demo.py
-           uv run --extra plot python examples/tree_bandits/violation_regret_demo.py   # + PNG
+Run with:  uv run --extra plot python examples/tree_bandits/violation_regret_demo.py
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
 
-from canopy.bandits import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import matplotlib.pyplot as plt  # noqa: E402
+
+from canopy.bandits import (  # noqa: E402
     HierarchicalTopK,
     SuccessiveEliminationTopK,
     TreeBandit,
     detect_violations,
 )
-from canopy.bandits.rewards import adversarial_spike_leaf_means
+from canopy.bandits.rewards import adversarial_spike_leaf_means  # noqa: E402
+from _plotstyle import PALETTE, ci_band, save_figure, set_style  # noqa: E402
 
 BRANCHING, DEPTH, LEVEL = 4, 5, 3
-BUDGET = 400.0  # tight cost budget (leaf_cost 1, probe_cost 0.05)
+BUDGET = 400.0
 PROBE_COST, LEAF_COST, NOISE = 0.05, 1.0, 0.05
-SPREAD, BEAM = 0.3, 8
-FLOOR = 0.08  # data-driven detection floor
-N_SEEDS = 24
+SPREAD, BEAM, FLOOR = 0.3, 8, 0.08
+N_SEEDS = 30
 K_VALUES = [1, 2, 4, 8, 16, 32, 64]
 
 
@@ -65,92 +54,79 @@ def env_for(lm: np.ndarray, seed: int) -> TreeBandit:
     )
 
 
-def main() -> None:
-    print(
-        f"multi-fidelity regime: branching {BRANCHING}, depth {DEPTH}, budget {BUDGET}, "
-        f"probe/leaf = {PROBE_COST}, {N_SEEDS} seeds"
-    )
-    print(f"{'K (violations)':>14s} {'detected':>9s} {'Hier':>6s} {'blind':>6s} {'hybrid':>7s}")
-    detected, hier, blind, hybrid = [], [], [], []
-    for k in K_VALUES:
-        det_k, hi_k, se_k, hy_k = [], [], [], []
-        for seed in range(N_SEEDS):
-            lm = adversarial_spike_leaf_means(BRANCHING, DEPTH, k, rng=np.random.default_rng(seed))
-            # assume-smooth
-            e = env_for(lm, 40 + seed)
-            hi_k.append(
+def run_all():
+    nk, ns = len(K_VALUES), N_SEEDS
+    detected = np.zeros((nk, ns))
+    hier = np.zeros((nk, ns))
+    blind = np.zeros((nk, ns))
+    hybrid = np.zeros((nk, ns))
+    cell = BRANCHING ** (DEPTH - LEVEL)
+    for i, k in enumerate(K_VALUES):
+        for s in range(N_SEEDS):
+            lm = adversarial_spike_leaf_means(BRANCHING, DEPTH, k, rng=np.random.default_rng(s))
+            e = env_for(lm, 40 + s)
+            hier[i, s] = (
                 HierarchicalTopK(BUDGET, 0.1, spread=SPREAD, beam_width=BEAM)
                 .run(e, 1)
                 .evaluate(e, 1)
             )
-            # blind
-            e = env_for(lm, 40 + seed)
-            se_k.append(SuccessiveEliminationTopK(BUDGET, 0.1).run(e, 1).evaluate(e, 1))
-            # hybrid: detect violation cells from data, relax the smooth bound there
-            ed = env_for(lm, 80 + seed)
-            report = detect_violations(
-                ed, LEVEL, lambda _l: FLOOR, np.random.default_rng(80 + seed), n_samples_per_cell=40
+            e = env_for(lm, 40 + s)
+            blind[i, s] = SuccessiveEliminationTopK(BUDGET, 0.1).run(e, 1).evaluate(e, 1)
+            rep = detect_violations(
+                env_for(lm, 80 + s),
+                LEVEL,
+                lambda _l: FLOOR,
+                np.random.default_rng(80 + s),
+                n_samples_per_cell=40,
             )
-            det_k.append(report.count)
-            cell = BRANCHING ** (DEPTH - LEVEL)
-            ranges = [(c * cell, (c + 1) * cell) for c in report.detected]
-            e = env_for(lm, 40 + seed)
-            hy_k.append(
+            detected[i, s] = rep.count
+            ranges = [(c * cell, (c + 1) * cell) for c in rep.detected]
+            e = env_for(lm, 40 + s)
+            hybrid[i, s] = (
                 HierarchicalTopK(BUDGET, 0.1, spread=SPREAD, beam_width=BEAM, relaxed_ranges=ranges)
                 .run(e, 1)
                 .evaluate(e, 1)
             )
-        detected.append(np.mean(det_k))
-        hier.append(np.mean(hi_k))
-        blind.append(np.mean(se_k))
-        hybrid.append(np.mean(hy_k))
+    return detected, hier, blind, hybrid
+
+
+def main() -> None:
+    set_style()
+    print(
+        f"multi-fidelity: branching {BRANCHING}, depth {DEPTH}, budget {BUDGET}, "
+        f"probe/leaf={PROBE_COST}, {N_SEEDS} seeds"
+    )
+    detected, hier, blind, hybrid = run_all()
+    print(f"{'K':>4s} {'detected':>9s} {'assume':>7s} {'blind':>7s} {'hybrid':>7s}")
+    for i, k in enumerate(K_VALUES):
         print(
-            f"{k:14d} {np.mean(det_k):9.1f} {np.mean(hi_k):6.2f} {np.mean(se_k):6.2f} "
-            f"{np.mean(hy_k):7.2f}"
+            f"{k:4d} {detected[i].mean():9.1f} {hier[i].mean():7.2f} "
+            f"{blind[i].mean():7.2f} {hybrid[i].mean():7.2f}"
         )
 
-    print(
-        "\nhybrid degrades gracefully in the number of violations and dominates both "
-        "baselines;\nthe violation cells are detected from data (no assumed constants)."
-    )
-
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("\n(install the 'plot' extra for the chart: uv run --extra plot ...)")
-        return
-
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 5.2))
-    axA.plot(K_VALUES, detected, "-o", color="#1f77b4", lw=2, label="detected")
-    axA.plot(K_VALUES, K_VALUES, "--", color="#999", lw=1, label="true K")
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(11, 4.2))
+    ci_band(axA, K_VALUES, detected, PALETTE["blue"], "detected", "o")
+    axA.plot(K_VALUES, K_VALUES, "--", color=PALETTE["gray"], lw=1, label="true $K$")
     axA.set_xscale("log", base=2)
     axA.set_yscale("log", base=2)
-    axA.set_xlabel("true violations K")
+    axA.set_xlabel("true violations $K$")
     axA.set_ylabel("detected violations")
-    axA.set_title("Violation count inferred from data", fontsize=10)
-    axA.grid(True, ls=":", alpha=0.5)
-    axA.legend(loc="upper left", fontsize=9)
+    axA.set_title("Violation count inferred from data")
+    axA.legend(loc="upper left")
 
-    axB.plot(K_VALUES, hybrid, "-o", color="#2ca02c", lw=2, label="hybrid (detect+relax)")
-    axB.plot(K_VALUES, hier, "-s", color="#ff7f0e", lw=2, label="assume-smooth")
-    axB.plot(K_VALUES, blind, "-^", color="#d62728", lw=2, label="blind (no structure)")
+    ci_band(axB, K_VALUES, hybrid, PALETTE["green"], "hybrid (detect+relax)", "o")
+    ci_band(axB, K_VALUES, hier, PALETTE["orange"], "assume-smooth", "s")
+    ci_band(axB, K_VALUES, blind, PALETTE["red"], "blind (no structure)", "^")
     axB.set_xscale("log", base=2)
-    axB.set_xlabel("number of violations K")
+    axB.set_xlabel("number of violations $K$")
     axB.set_ylabel("top-1 accuracy @ fixed budget")
-    axB.set_title("Hybrid degrades gracefully and dominates both baselines", fontsize=10)
+    axB.set_title("Hybrid degrades gracefully and dominates")
     axB.set_ylim(0, 1.02)
-    axB.grid(True, ls=":", alpha=0.5)
-    axB.legend(loc="upper right", fontsize=9)
+    axB.legend(loc="upper right")
 
-    fig.suptitle(
-        "Value of structure vs. number of Lipschitz violations (multi-fidelity regime)", fontsize=11
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = Path(__file__).parent.parent / "images" / "tree_violation_regret.png"
-    out.parent.mkdir(exist_ok=True)
-    fig.savefig(out, dpi=150)
-    plt.close(fig)
-    print(f"\nsaved chart to {out}")
+    fig.tight_layout()
+    out = save_figure(fig, "tree_violation_regret")
+    print(f"\nsaved chart to {out} (+ .png)")
 
 
 if __name__ == "__main__":

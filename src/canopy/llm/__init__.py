@@ -19,6 +19,7 @@ from canopy.llm.base import (
     measure_quality_matrix,
 )
 from canopy.llm.bedrock import DEFAULT_PRICING, BedrockClient
+from canopy.llm.cache import BudgetError, CachingLLMClient
 from canopy.llm.openai import OpenAIClient
 
 __all__ = [
@@ -31,5 +32,7 @@ __all__ = [
     "BedrockClient",
     "OpenAIClient",
     "AnthropicClient",
+    "CachingLLMClient",
+    "BudgetError",
     "DEFAULT_PRICING",
 ]
