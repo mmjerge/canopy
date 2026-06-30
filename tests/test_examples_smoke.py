@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -35,4 +36,10 @@ def test_example_module_imports(path: Path) -> None:
     spec = importlib.util.spec_from_file_location(f"example_{path.stem}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Register before exec (canonical importlib pattern): dataclasses and other tools resolve
+    # annotations via sys.modules[cls.__module__], which fails if the module isn't registered.
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
