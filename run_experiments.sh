@@ -116,9 +116,19 @@ fi
 if [ "$GROUP" = "ALL" ] || [ "$GROUP" = "D" ]; then
   echo "== Group D (vLLM systems eval) =="
   if command -v nvidia-smi >/dev/null 2>&1 && "$VLLM_PY" -c "import vllm" >/dev/null 2>&1; then
-    launch vllm_systems "$VLLM_PY" examples/systems/vllm_prefix_cache_eval.py \
-      --model "$VLLM_MODEL" --num-prompts 2000 --pad-tokens 200 \
-      --request-rate 20 --max-tokens 64 --shift
+    # Run the three vLLM jobs SEQUENTIALLY (one server at a time) to avoid GPU OOM; the whole
+    # sequence is one backgrounded job so the script still returns.
+    nohup caffeinate -dimsu bash -c "
+      '$VLLM_PY' examples/systems/vllm_prefix_cache_eval.py --model '$VLLM_MODEL' \
+        --num-prompts 2000 --pad-tokens 200 --request-rate 20 --max-tokens 64 --shift \
+        > logs/vllm_systems.log 2>&1
+      '$VLLM_PY' examples/systems/vllm_prefix_cache_eval.py --model '$VLLM_MODEL' \
+        --num-prompts 2000 --pad-tokens 200 --kv-block-sweep 500,1000,2000,4000 \
+        > logs/vllm_budget.log 2>&1
+      '$VLLM_PY' examples/systems/vllm_policy_eval.py --model '$VLLM_MODEL' \
+        --num-prompts 4000 --pad-tokens 200 --kv-budget 64 > logs/vllm_policy.log 2>&1
+    " > logs/vllm_group.log 2>&1 &
+    echo "$!  vllm_group (systems -> budget -> policy, sequential)" | tee -a "$PIDS_FILE"
   else
     echo "  skipping vLLM systems eval: needs an NVIDIA GPU (nvidia-smi) and vllm importable"
     echo "  in \$VLLM_PY ($VLLM_PY). Run 'GROUP=D VLLM_PY=/gpu/env/bin/python bash run_experiments.sh'"

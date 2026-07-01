@@ -22,6 +22,26 @@ Knobs: `--pad-tokens` (longer shared prefixes → larger prefill savings), `--re
 for the non-stationary case), `--corpus-file prompts.txt` (use a real prompt log instead of the
 templated workload), `--extra-arg` (pass through any `vllm serve` flag, repeatable).
 
+### KV-budget frontier (savings vs cache memory, real GPU)
+Sweep the KV-cache size (`--num-gpu-blocks-override`) to trace TTFT / hit-rate vs. budget — the
+real-hardware analog of the proxy's savings-vs-memory frontier (prefix caching stays ON, LRU):
+```bash
+python examples/systems/vllm_prefix_cache_eval.py --model Qwen/Qwen2.5-7B-Instruct \
+    --kv-block-sweep 500,1000,2000,4000
+```
+Writes `vllm_prefix_cache_budget.{json,tex,pdf}`.
+
+### Policy comparison — adaptive vs LRU/LFU (GPU-calibrated)
+`vllm_policy_eval.py` measures the real per-token prefill time a cache hit saves on your GPU, then
+replays the paper's eviction policies (adaptive / LRU / LFU / offline) over the shared-prefix
+workload with a mid-stream shift, reporting realized TTFT saved per policy. This is the evidence
+that the **adaptive policy beats the engine-default LRU** (especially post-shift):
+```bash
+python examples/systems/vllm_policy_eval.py --model Qwen/Qwen2.5-7B-Instruct --kv-budget 64
+```
+Writes `vllm_policy.{json,tex,pdf}`. It is a hardware-calibrated trace-driven comparison (real GPU
+costs, our eviction decisions), not an in-engine deployment (that is Tier 2 below).
+
 Validate the harness with **no GPU** (mocked timings; exercises trace + aggregation + outputs):
 ```bash
 python examples/systems/vllm_prefix_cache_eval.py --dry-run
