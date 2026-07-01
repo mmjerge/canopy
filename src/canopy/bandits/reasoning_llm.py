@@ -6,7 +6,7 @@ finds correct answers at lower compute than best-of-N. It is deliberately decoup
 specific model: every method takes a ``generate`` callable
 ``(prompt, max_tokens, seed) -> text``, so it runs against a mock LLM in tests and against a
 real model (e.g. ``canopy.llm.BedrockClient`` via ``canopy.llm.as_generate_fn``) in
-``examples/reasoning/gsm8k_reasoning_search.py``.
+``examples/reasoning/reasoning_search.py`` (GSM8K baseline and MATH headline).
 
 Two strategies, compared at an equal budget of generation calls:
 
@@ -78,6 +78,93 @@ def is_correct(text: str, gold: str) -> bool:
     return a is not None and a == _normalize(gold)
 
 
+def _grade_numeric(answer: str | None, gold: str) -> bool:
+    """Default (GSM8K-style) grade: normalized string / numeric equality."""
+    return answer is not None and answer == _normalize(gold)
+
+
+# --- MATH-style extraction and grading (boxed answers, symbolic equivalence) -----
+
+_BOXED_MARK = "\\boxed"
+
+
+def _extract_boxed(text: str) -> str | None:
+    """Return the content of the last balanced ``\\boxed{...}`` in ``text``, else ``None``."""
+    idx = text.rfind(_BOXED_MARK)
+    if idx < 0:
+        return None
+    i = text.find("{", idx)
+    if i < 0:
+        return None
+    depth = 0
+    for j in range(i, len(text)):
+        if text[j] == "{":
+            depth += 1
+        elif text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[i + 1 : j]
+    return None
+
+
+def normalize_math(s: str) -> str:
+    """Canonicalize a LaTeX-ish math answer to a comparable string (light MATH-eval rules)."""
+    s = s.strip()
+    for tok in ("$", "\\(", "\\)", "\\left", "\\right", "\\!", "\\,", "\\;", "\\ ", "%", "\\%"):
+        s = s.replace(tok, "")
+    s = s.replace("\\dfrac", "\\frac").replace("\\tfrac", "\\frac")
+    s = s.replace("^{\\circ}", "").replace("^\\circ", "")
+    s = re.sub(r"\\text\{([^{}]*)\}", r"\1", s)
+    s = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"(\1)/(\2)", s)
+    s = s.replace(" ", "").replace("{", "").replace("}", "").rstrip(".")
+    return s
+
+
+def extract_boxed_answer(text: str) -> str | None:
+    """Extract a MATH final answer: prefer ``\\boxed{...}``, else after ``####``, else last number."""
+    boxed = _extract_boxed(text)
+    if boxed is not None:
+        return normalize_math(boxed)
+    if "####" in text:
+        tail = text.split("####")[-1].strip()
+        first = tail.splitlines()[0] if tail else ""
+        return normalize_math(first) if first else None
+    nums = _NUM.findall(text)
+    return _normalize(nums[-1]) if nums else None
+
+
+def _to_float(s: str) -> float | None:
+    """Best-effort float for a simple rational/decimal answer (``(3)/(2)``, ``3/2``, ``0.5``)."""
+    t = s.replace("(", "").replace(")", "").replace(",", "")
+    try:
+        if "/" in t:
+            num, den = t.split("/", 1)
+            return float(num) / float(den)
+        return float(t)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def grade_math(answer: str | None, gold: str) -> bool:
+    """Grade a MATH answer against gold: normalized string, numeric, then symbolic equivalence."""
+    if answer is None:
+        return False
+    g = normalize_math(str(gold))
+    if answer == g:
+        return True
+    fa, fg = _to_float(answer), _to_float(g)
+    if fa is not None and fg is not None:
+        return abs(fa - fg) < 1e-6
+    try:  # optional symbolic check (e.g. surds); never hard-fails the run
+        import sympy
+
+        if sympy.simplify(sympy.sympify(answer) - sympy.sympify(g)) == 0:
+            return True
+    except Exception:  # noqa: BLE001 -- sympy missing or unparseable answer
+        pass
+    return False
+
+
 # --- prompts -------------------------------------------------------------------
 
 _SOLVE = (
@@ -109,6 +196,8 @@ def best_of_n(
     generate: GenerateFn,
     n: int,
     max_tokens: int = 512,
+    extract_fn: Callable[[str], str | None] = extract_answer,
+    grade_fn: Callable[[str | None, str], bool] = _grade_numeric,
 ) -> SearchResult:
     """Sample ``n`` full solutions and return the majority-vote answer (self-consistency)."""
     budget = Budget()
@@ -116,11 +205,11 @@ def best_of_n(
     for i in range(n):
         text = generate(_SOLVE.format(q=question), max_tokens, i)
         budget.charge(text)
-        a = extract_answer(text)
+        a = extract_fn(text)
         if a is not None:
             votes[a] += 1
     answer = votes.most_common(1)[0][0] if votes else None
-    return SearchResult(answer=answer, correct=(answer == _normalize(gold)), budget=budget)
+    return SearchResult(answer=answer, correct=grade_fn(answer, gold), budget=budget)
 
 
 def value_guided_search(
@@ -133,6 +222,8 @@ def value_guided_search(
     max_tokens: int = 512,
     value_fn: Callable[[list[str]], float] | None = None,
     final_rollouts: int = 1,
+    extract_fn: Callable[[str], str | None] = extract_answer,
+    grade_fn: Callable[[str | None, str], bool] = _grade_numeric,
 ) -> SearchResult:
     """Beam/tree search over reasoning steps with cheap-rollout value (multi-fidelity probe).
 
@@ -148,7 +239,7 @@ def value_guided_search(
     given an informative value.
     """
     if value_fn is None:
-        value_fn = _self_consistency
+        value_fn = lambda texts: _self_consistency(texts, extract_fn)  # noqa: E731
     budget = Budget()
     prefix = ""
     for step in range(n_steps):
@@ -175,18 +266,18 @@ def value_guided_search(
     for f in range(final_rollouts):
         final = generate(_ROLLOUT.format(q=question, prefix=prefix), max_tokens, 999_000 + f)
         budget.charge(final)
-        a = extract_answer(final)
+        a = extract_fn(final)
         if a is not None:
             votes[a] += 1
     answer = votes.most_common(1)[0][0] if votes else None
-    return SearchResult(answer=answer, correct=(answer == _normalize(gold)), budget=budget)
+    return SearchResult(answer=answer, correct=grade_fn(answer, gold), budget=budget)
 
 
-def _self_consistency(rollout_texts: list[str]) -> float:
+def _self_consistency(rollout_texts: list[str], extract_fn=extract_answer) -> float:
     """Default value: size of the largest agreeing answer set over the rollouts (in [0,1])."""
     answers: Counter[str] = Counter()
     for t in rollout_texts:
-        a = extract_answer(t)
+        a = extract_fn(t)
         if a is not None:
             answers[a] += 1
     if not answers or not rollout_texts:

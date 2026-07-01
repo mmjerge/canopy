@@ -23,6 +23,7 @@ from canopy.bandits.online import (
     run_local_lipschitz,
 )
 from canopy.bandits.routing import PrefixTreeRouting, RouteResult, make_routing_scenario, run_router
+from canopy.bandits.routing import ContextualUCBRouter
 from canopy.bandits.prefix_cache import CacheResult, PrefixCacheEnv, offline_optimal, run_cache
 from canopy.bandits.reasoning import (
     best_of_n,
@@ -100,6 +101,7 @@ __all__ = [
     "RouteResult",
     "make_routing_scenario",
     "run_router",
+    "ContextualUCBRouter",
     "PrefixCacheEnv",
     "CacheResult",
     "run_cache",

@@ -131,6 +131,69 @@ def make_routing_scenario(
     return quality, costs
 
 
+class ContextualUCBRouter:
+    """Online cost-aware contextual UCB router -- the learned routing policy, driven per call.
+
+    This is the same learner as ``run_router``'s ``"hierarchical"`` strategy, factored out so it
+    can be used *online* in a real system (e.g. a live agent loop) rather than only in the
+    ``PrefixTreeRouting`` simulator: call :meth:`select` to pick a model for a context, then
+    :meth:`update` once the reward (quality signal) for that pull is known. It maintains a
+    per-``(model, region)`` mean-quality estimate and picks the arm maximizing the optimistic
+    net utility ``qhat - lam*cost + c*sqrt(2 ln t / n)``.
+
+    Set ``n_regions=1`` to recover the structure-blind (flat) learner -- the honest baseline that
+    sees the same information but no context, exactly as in the routing experiments.
+
+    Args:
+        n_models: Size of the model pool (arms).
+        costs: Per-model relative cost, length ``n_models`` (known a priori, e.g. from pricing).
+        n_regions: Number of discrete contexts (1 = flat / structure-blind).
+        lam: Cost weight in the net utility ``quality - lam*cost``.
+        c: UCB exploration constant.
+    """
+
+    def __init__(
+        self,
+        n_models: int,
+        costs: NDArray[np.float64],
+        n_regions: int = 1,
+        lam: float = 0.3,
+        c: float = 0.4,
+    ) -> None:
+        self.n_models = int(n_models)
+        self.costs = np.asarray(costs, dtype=np.float64)
+        self.n_regions = int(n_regions)
+        self.lam = float(lam)
+        self.c = float(c)
+        self.counts = np.zeros((self.n_models, self.n_regions))
+        self.sums = np.zeros((self.n_models, self.n_regions))
+        self.t = 0
+
+    def select(self, region: int = 0) -> int:
+        """Return the arm (model index) maximizing the optimistic net utility in ``region``."""
+        region = min(max(region, 0), self.n_regions - 1)
+        self.t += 1
+        best_m, best_val = 0, -np.inf
+        for m in range(self.n_models):
+            n = self.counts[m, region]
+            if n == 0:
+                val = np.inf  # try every arm once per region
+            else:
+                qhat = self.sums[m, region] / n
+                val = (qhat - self.lam * self.costs[m]) + self.c * np.sqrt(
+                    2.0 * np.log(self.t + 2) / n
+                )
+            if val > best_val:
+                best_val, best_m = val, m
+        return best_m
+
+    def update(self, region: int, model: int, quality: float) -> None:
+        """Record a realized quality signal in ``[0,1]`` for a ``(region, model)`` pull."""
+        region = min(max(region, 0), self.n_regions - 1)
+        self.counts[model, region] += 1.0
+        self.sums[model, region] += float(quality)
+
+
 def run_router(
     env: PrefixTreeRouting,
     horizon: int,
