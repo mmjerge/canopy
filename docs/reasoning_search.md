@@ -71,14 +71,25 @@ is verified now with a mock LLM (`tests/test_reasoning_llm.py`): given an inform
 (graded/PRM-style) value, value-guided beats best-of-N at matched budget, confirming the
 machinery; whether self-consistency is informative enough on real traces is the open question.
 
-`examples/reasoning/gsm8k_reasoning_search.py` runs it on real GSM8K via the Bedrock client used by the
-routing experiments (matched generation-call budget, accuracy reported):
+`examples/reasoning/reasoning_search.py` runs it on a real benchmark via the Bedrock client used
+by the routing experiments (matched generation-call budget, accuracy with bootstrap CIs). The
+headline benchmark is **MATH** (long multi-step derivations, where the exponential-vs-polynomial
+gap in the number of decision steps `K` is largest and answers stay reachable); **GSM8K** is kept
+as a near-saturated, short-chain baseline via `--benchmark gsm8k`. MATH answers are graded by
+boxed-answer extraction with numeric/symbolic equivalence, GSM8K by the `####` numeric convention.
 
 ```bash
 uv sync --extra llm --extra bench
-uv run --extra llm --extra bench python examples/reasoning/gsm8k_reasoning_search.py --n-problems 20
+uv run --extra llm --extra bench python examples/reasoning/reasoning_search.py --benchmark math --n-problems 100 --resume
+uv run --extra llm --extra bench python examples/reasoning/reasoning_search.py --benchmark gsm8k  # baseline
 # (needs AWS creds + Bedrock model access; makes real paid calls)
 ```
+
+Why not an ultra-hard benchmark (e.g. Humanity's Last Exam)? Search reallocates compute; it
+cannot find a correct trace the model never samples. On benchmarks where pass@k stays near zero
+both strategies sit at the floor and the comparison is capability-bound, not search-bound — the
+wrong regime to test allocation. MATH sits in the reachable-but-unreliable regime that isolates
+the search question.
 
 The honest framing: a negative result is also informative — it would say the bottleneck is the
 *value signal*, not the search. See `docs/reasoning_search.md`.
