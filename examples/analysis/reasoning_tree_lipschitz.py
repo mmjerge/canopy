@@ -160,11 +160,21 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     if bar is not None:
         bar.close()
     spreads = np.array(sibling_spreads)
+    ehits = np.array(edge_hits)
+    egaps = np.array(edge_gaps)
+    # The decisive number: edge-following *on the pivotal steps* (sibling spread > tau), where the
+    # choice actually matters. The unconditional edge-hit is inflated by the many smooth steps
+    # whose siblings are ~equal (any pick trivially "hits"), so we report both.
+    pivotal = spreads > tau
+    n_piv = int(pivotal.sum())
     return {
         "cheap": all_cheap, "true": all_true,
         "sibling_spreads": sibling_spreads,
-        "edge_hit_rate": float(np.mean(edge_hits)) if edge_hits else 0.0,
-        "edge_gap": float(np.mean(edge_gaps)) if edge_gaps else 0.0,
+        "edge_hit_rate": float(ehits.mean()) if ehits.size else 0.0,
+        "edge_gap": float(egaps.mean()) if egaps.size else 0.0,
+        "edge_hit_pivotal": float(ehits[pivotal].mean()) if n_piv else float("nan"),
+        "edge_gap_pivotal": float(egaps[pivotal].mean()) if n_piv else float("nan"),
+        "n_pivotal": n_piv, "n_steps_total": int(spreads.size),
         "K_by_tau": {t: float(np.mean(spreads > t)) if spreads.size else 0.0 for t in TAU_SWEEP},
         "n_steps_seen": per_problem_steps,
         "path_value_by_step": [float(np.mean(v)) if v else float("nan")
@@ -184,7 +194,10 @@ def _write_outputs(agg, model, bench, n_problems):
         "benchmark": bench, "model": model, "n_problems": n_problems,
         "pearson_cheap_true": r_p, "spearman_cheap_true": r_s,
         "edge_hit_rate": agg["edge_hit_rate"], "random_edge_hit_rate": base,
-        "edge_gap": agg["edge_gap"], "K_by_tau": agg["K_by_tau"],
+        "edge_gap": agg["edge_gap"],
+        "edge_hit_pivotal": agg["edge_hit_pivotal"], "edge_gap_pivotal": agg["edge_gap_pivotal"],
+        "n_pivotal": agg["n_pivotal"], "n_steps_total": agg["n_steps_total"], "tau": agg["tau"],
+        "K_by_tau": agg["K_by_tau"],
         "max_steps": int(steps.max()) if steps.size else 0,
         "path_value_by_step": agg["path_value_by_step"],
         "branching": agg["branching"], "n_steps": agg["n_steps"],
@@ -199,7 +212,10 @@ def _write_outputs(agg, model, bench, n_problems):
         "\\begin{tabular}{lr}\n\\toprule\nQuantity & Value \\\\\n\\midrule\n"
         f"Cheap-vs-true node value (Spearman $\\rho$) & {r_s:.3f} \\\\\n"
         f"Cheap-vs-true node value (Pearson $r$) & {r_p:.3f} \\\\\n"
-        f"Edge-following hit rate (chance {base:.2f}) & {agg['edge_hit_rate']:.3f} \\\\\n"
+        f"Edge-following hit rate, all steps (chance {base:.2f}) & {agg['edge_hit_rate']:.3f} "
+        "\\\\\n"
+        f"Edge-following hit rate, pivotal steps only & {agg['edge_hit_pivotal']:.3f} "
+        f"($n$={agg['n_pivotal']}) \\\\\n"
         f"Mean true value lost per step (edge gap) & {agg['edge_gap']:.3f} \\\\\n"
         f"Pivotal-step fraction & {ktau} \\\\\n"
         "\\bottomrule\n\\end{tabular}\n"
@@ -211,6 +227,9 @@ def _write_outputs(agg, model, bench, n_problems):
     print(f"  cheap-vs-true value: Spearman rho={r_s:.3f} (headline), Pearson r={r_p:.3f}")
     print(f"  edge-following hit rate={agg['edge_hit_rate']:.3f} (chance {base:.2f}); "
           f"mean edge gap={agg['edge_gap']:.3f}")
+    print(f"  edge-following hit rate on PIVOTAL steps (spread>{agg['tau']})="
+          f"{agg['edge_hit_pivotal']:.3f}  (n={agg['n_pivotal']}/{agg['n_steps_total']}; "
+          f"gap={agg['edge_gap_pivotal']:.3f})  <- the decisive number")
     print("  pivotal-step fraction: "
           + ", ".join(f"tau={t}:{100 * v:.0f}%" for t, v in agg["K_by_tau"].items()))
     print("  chosen-path true value by step: "
