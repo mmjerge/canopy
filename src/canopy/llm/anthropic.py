@@ -57,8 +57,13 @@ class AnthropicClient:
         prompt: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> Generation:
-        """Return ``(response_text, input_tokens, output_tokens)`` for one prompt."""
+        """Return ``(response_text, input_tokens, output_tokens)`` for one prompt.
+
+        ``seed`` distinguishes independent same-prompt samples for caching (the API samples at
+        ``temperature``); it is not forwarded to the model.
+        """
         kwargs: dict = {
             "model": model_id,
             "messages": [{"role": "user", "content": prompt}],

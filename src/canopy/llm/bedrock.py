@@ -82,11 +82,15 @@ class BedrockClient:
         prompt: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> Generation:
         """Return ``(response_text, input_tokens, output_tokens)`` for one prompt.
 
         ``temperature`` (if given) enables diverse sampling across calls -- needed for
-        best-of-N / rollout search; ``max_tokens`` overrides the client default.
+        best-of-N / rollout search; ``max_tokens`` overrides the client default. ``seed``
+        distinguishes independent same-prompt samples for caching; the Converse API samples
+        stochastically at ``temperature`` (it has no portable seed field), so it is used only to
+        keep draws distinct in any wrapping cache, not forwarded to the model.
         """
         cfg: dict = {"maxTokens": max_tokens or self.max_tokens}
         if temperature is not None:

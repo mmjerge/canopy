@@ -22,8 +22,18 @@ class BudgetError(RuntimeError):
     """Raised when a configured call or spend cap would be exceeded."""
 
 
-def _key(model_id: str, prompt: str, temperature: float | None, max_tokens: int | None) -> str:
-    payload = f"{model_id}\x00{temperature}\x00{max_tokens}\x00{prompt}"
+def _key(
+    model_id: str,
+    prompt: str,
+    temperature: float | None,
+    max_tokens: int | None,
+    seed: int | None = None,
+) -> str:
+    # ``seed`` is part of the key so independent same-prompt samples (self-consistency, the
+    # branching candidates of value-guided search) are cached as distinct draws instead of
+    # collapsing to the first completion. ``seed=None`` reproduces the old single-sample key.
+    suffix = "" if seed is None else f"\x00{seed}"
+    payload = f"{model_id}\x00{temperature}\x00{max_tokens}\x00{prompt}{suffix}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -65,14 +75,18 @@ class CachingLLMClient:
         prompt: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> Generation:
-        key = _key(model_id, prompt, temperature, max_tokens)
+        key = _key(model_id, prompt, temperature, max_tokens, seed)
         cached = self._cache.get(key)
         if cached is not None:
             self.hits += 1
             return cached[0], int(cached[1]), int(cached[2])
         if self.max_calls is not None and self.calls >= self.max_calls:
             raise BudgetError(f"call cap reached ({self.max_calls}); not issuing more requests")
+        # ``seed`` is used only to partition the cache: the wrapped client samples a fresh draw
+        # at ``temperature`` on this cache miss, so distinct seeds yield distinct samples without
+        # requiring the provider to honor a seed. (It is not forwarded, for provider-agnosticism.)
         text, in_tok, out_tok = self._client.generate(model_id, prompt, temperature, max_tokens)
         self.calls += 1
         in_price, out_price = self.price_per_1k(model_id)
