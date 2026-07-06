@@ -224,6 +224,7 @@ def value_guided_search(
     final_rollouts: int = 1,
     extract_fn: Callable[[str], str | None] = extract_answer,
     grade_fn: Callable[[str | None, str], bool] = _grade_numeric,
+    trace_log: list | None = None,
 ) -> SearchResult:
     """Beam/tree search over reasoning steps with cheap-rollout value (multi-fidelity probe).
 
@@ -237,13 +238,22 @@ def value_guided_search(
     ``value_fn(rollout_texts) -> float`` is the value signal, defaulting to **self-consistency**
     (no ground truth). A verifier/PRM-style value isolates whether the *search machinery* helps
     given an informative value.
+
+    If ``trace_log`` (a list) is provided, one record per candidate node is appended:
+    ``{step, candidate, cheap_value, true_value, n_rollouts, chosen}`` where ``cheap_value`` is
+    the biased probe (``value_fn``) and ``true_value`` is the *unbiased* node value -- the
+    fraction of that candidate's rollouts that actually grade correct against ``gold``. This is
+    the data for characterizing the reasoning value function as (almost) tree-$K$-Lipschitz:
+    whether the cheap probe predicts the true node value, and how many steps are pivotal
+    (violations). Logging grades every rollout but changes neither the search nor the budget.
     """
     if value_fn is None:
         value_fn = lambda texts: _self_consistency(texts, extract_fn)  # noqa: E731
     budget = Budget()
     prefix = ""
     for step in range(n_steps):
-        best_step, best_val = None, -1.0
+        best_step, best_val, best_c = None, -1.0, 0
+        step_records = []
         for c in range(branching):
             cand = generate(
                 _CONTINUE.format(q=question, prefix=prefix), max_tokens // 2, 1000 * step + c
@@ -259,8 +269,19 @@ def value_guided_search(
                 budget.charge(roll)
                 roll_texts.append(roll)
             val = value_fn(roll_texts)
+            if trace_log is not None:
+                n_correct = sum(1 for t in roll_texts if grade_fn(extract_fn(t), gold))
+                step_records.append({
+                    "step": step, "candidate": c, "cheap_value": float(val),
+                    "true_value": n_correct / max(1, len(roll_texts)),
+                    "n_rollouts": len(roll_texts), "chosen": False,
+                })
             if val > best_val:
                 best_val, best_step = val, cand
+                best_c = c
+        if trace_log is not None and step_records:
+            step_records[best_c]["chosen"] = True
+            trace_log.extend(step_records)
         prefix = prefix + "\n" + (best_step or "")
     votes: Counter[str] = Counter()
     for f in range(final_rollouts):
