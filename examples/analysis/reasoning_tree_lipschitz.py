@@ -72,12 +72,25 @@ def _spearman(x, y):
     return _pearson(rank(np.asarray(x, float)), rank(np.asarray(y, float)))
 
 
+TAU_SWEEP = [0.25, 0.5, 0.75]  # sibling true-value spreads counted as "pivotal" (violation)
+
+
 def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_error):
-    """Run value-guided search with tree logging over problems; return aggregated records."""
+    """Run value-guided search with tree logging over problems; return aggregated records.
+
+    Beyond the cheap-vs-true correlation, we record the metric that directly tests the value
+    edge: at each step, whether the highest-*cheap*-value sibling is also a highest-*true*-value
+    sibling (``edge_hit``), and the true value lost by following the cheap edge instead of the
+    best sibling (``edge_gap``). These are robust to the coarse value grid that attenuates a
+    linear correlation, and they are exactly what value-guided search relies on.
+    """
     branching, n_steps, rollouts = cfg
     all_cheap, all_true = [], []
-    per_problem_K, per_problem_steps = [], []
+    sibling_spreads = []                      # per-step max-min true value across siblings
+    edge_hits, edge_gaps = [], []             # per-step: cheap-argmax is true-argmax? gap?
+    per_problem_steps = []
     path_value_by_step = [[] for _ in range(n_steps)]  # chosen-candidate true value per step
+    eps = 1.0 / max(1, rollouts) / 2.0        # ties within one rollout's resolution
     for q, gold in problems:
         trace: list[dict] = []
         try:
@@ -92,19 +105,25 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
         for rec in trace:
             all_cheap.append(rec["cheap_value"]); all_true.append(rec["true_value"])
             by_step.setdefault(rec["step"], []).append(rec)
-        K = 0
         for step, recs in by_step.items():
-            tv = [r["true_value"] for r in recs]
-            if max(tv) - min(tv) > tau:
-                K += 1
-            for r in recs:
-                if r["chosen"]:
-                    path_value_by_step[step].append(r["true_value"])
-        per_problem_K.append(K)
+            tv = np.array([r["true_value"] for r in recs])
+            cv = np.array([r["cheap_value"] for r in recs])
+            sibling_spreads.append(float(tv.max() - tv.min()))
+            chosen_true = next(r["true_value"] for r in recs if r["chosen"])
+            # edge-following: does the cheap-argmax sibling reach (near) the best true value?
+            cheap_pick_true = tv[int(cv.argmax())]
+            edge_hits.append(float(cheap_pick_true >= tv.max() - eps))
+            edge_gaps.append(float(tv.max() - cheap_pick_true))
+            path_value_by_step[step].append(chosen_true)
         per_problem_steps.append(len(by_step))
+    spreads = np.array(sibling_spreads)
     return {
         "cheap": all_cheap, "true": all_true,
-        "K": per_problem_K, "n_steps_seen": per_problem_steps,
+        "sibling_spreads": sibling_spreads,
+        "edge_hit_rate": float(np.mean(edge_hits)) if edge_hits else 0.0,
+        "edge_gap": float(np.mean(edge_gaps)) if edge_gaps else 0.0,
+        "K_by_tau": {t: float(np.mean(spreads > t)) if spreads.size else 0.0 for t in TAU_SWEEP},
+        "n_steps_seen": per_problem_steps,
         "path_value_by_step": [float(np.mean(v)) if v else float("nan")
                                for v in path_value_by_step],
         "tau": tau, "branching": branching, "n_steps": n_steps, "rollouts": rollouts,
@@ -115,44 +134,44 @@ def _write_outputs(agg, model, bench, n_problems):
     FIGDIR.mkdir(parents=True, exist_ok=True)
     r_p = _pearson(agg["cheap"], agg["true"])
     r_s = _spearman(agg["cheap"], agg["true"])
-    K = np.array(agg["K"], float)
     steps = np.array(agg["n_steps_seen"], float)
-    viol_frac = float(K.sum() / max(1.0, steps.sum()))
+    base = 1.0 / max(2, agg["branching"])  # edge-hit rate a random pick would achieve
     stem = f"reasoning_tree_lipschitz_{bench}"
     payload = {
         "benchmark": bench, "model": model, "n_problems": n_problems,
         "pearson_cheap_true": r_p, "spearman_cheap_true": r_s,
-        "mean_K": float(K.mean()) if K.size else 0.0,
-        "median_K": float(np.median(K)) if K.size else 0.0,
+        "edge_hit_rate": agg["edge_hit_rate"], "random_edge_hit_rate": base,
+        "edge_gap": agg["edge_gap"], "K_by_tau": agg["K_by_tau"],
         "max_steps": int(steps.max()) if steps.size else 0,
-        "violation_step_fraction": viol_frac,
         "path_value_by_step": agg["path_value_by_step"],
-        "tau": agg["tau"], "branching": agg["branching"], "n_steps": agg["n_steps"],
+        "branching": agg["branching"], "n_steps": agg["n_steps"],
         "rollouts": agg["rollouts"], "n_nodes": len(agg["cheap"]),
     }
     (FIGDIR / f"{stem}_results.json").write_text(json.dumps(payload, indent=2))
 
+    ktau = "; ".join(f"$\\tau{{=}}{t}$: {100 * v:.0f}\\%" for t, v in agg["K_by_tau"].items())
     tex = (
         f"% Reasoning-tree Lipschitz characterization ({bench.upper()}, "
         "auto-generated by reasoning_tree_lipschitz.py)\n"
         "\\begin{tabular}{lr}\n\\toprule\nQuantity & Value \\\\\n\\midrule\n"
-        f"Cheap-vs-true node value (Pearson $r$) & {r_p:.3f} \\\\\n"
         f"Cheap-vs-true node value (Spearman $\\rho$) & {r_s:.3f} \\\\\n"
-        f"Mean violations per problem $\\bar K$ & {payload['mean_K']:.2f} \\\\\n"
-        f"Median violations per problem & {payload['median_K']:.1f} \\\\\n"
-        f"Pivotal (violation) step fraction & {100 * viol_frac:.1f}\\% \\\\\n"
-        f"Steps per problem (max) & {payload['max_steps']} \\\\\n"
+        f"Cheap-vs-true node value (Pearson $r$) & {r_p:.3f} \\\\\n"
+        f"Edge-following hit rate (chance {base:.2f}) & {agg['edge_hit_rate']:.3f} \\\\\n"
+        f"Mean true value lost per step (edge gap) & {agg['edge_gap']:.3f} \\\\\n"
+        f"Pivotal-step fraction & {ktau} \\\\\n"
         "\\bottomrule\n\\end{tabular}\n"
     )
     (FIGDIR / f"{stem}_table.tex").write_text(tex)
 
     print(f"\n{bench.upper()} reasoning-tree characterization ({n_problems} problems, "
           f"{payload['n_nodes']} nodes), model {model}")
-    print(f"  cheap-vs-true value: Pearson r={r_p:.3f}, Spearman rho={r_s:.3f}")
-    print(f"  violations K per problem: mean={payload['mean_K']:.2f}, "
-          f"median={payload['median_K']:.1f}; pivotal-step fraction={viol_frac:.1%}")
-    print(f"  chosen-path true value by step: "
-          + ", ".join(f"{v:.2f}" for v in agg['path_value_by_step']))
+    print(f"  cheap-vs-true value: Spearman rho={r_s:.3f} (headline), Pearson r={r_p:.3f}")
+    print(f"  edge-following hit rate={agg['edge_hit_rate']:.3f} (chance {base:.2f}); "
+          f"mean edge gap={agg['edge_gap']:.3f}")
+    print("  pivotal-step fraction: "
+          + ", ".join(f"tau={t}:{100 * v:.0f}%" for t, v in agg["K_by_tau"].items()))
+    print("  chosen-path true value by step: "
+          + ", ".join(f"{v:.2f}" for v in agg["path_value_by_step"]))
     try:
         out = _plot(agg, payload, model, bench, n_problems)
         print(f"  wrote json+table to {FIGDIR} and figure to {out} (+ .png)")
@@ -167,34 +186,36 @@ def _plot(agg, payload, model, bench, n_problems):
     import matplotlib.pyplot as plt
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(12, 4.6))
-    # Panel A: cheap probe vs true node value (informativeness)
+    # Panel A: cheap probe vs true node value (informativeness); headline is Spearman + edge-hit
     cheap, true = np.asarray(agg["cheap"]), np.asarray(agg["true"])
     jit = 0.01 * np.random.default_rng(0).standard_normal(cheap.shape)
     axA.scatter(cheap + jit, true + jit, s=10, alpha=0.25, color=PALETTE["blue"])
     if cheap.size >= 2:
         b, a = np.polyfit(cheap, true, 1)
         xs = np.array([cheap.min(), cheap.max()])
-        axA.plot(xs, a + b * xs, "-", color=PALETTE["red"], lw=2,
-                 label=f"fit (Pearson $r$={payload['pearson_cheap_true']:.2f})")
+        axA.plot(xs, a + b * xs, "-", color=PALETTE["red"], lw=2, label="linear fit")
     axA.set_xlabel("cheap probe value (self-consistency)")
     axA.set_ylabel("true node value (fraction of rollouts correct)")
-    axA.set_title("Cheap probe predicts true value (tree-Lipschitz backbone)")
+    axA.set_title(f"Cheap probe tracks true value (Spearman $\\rho$="
+                  f"{payload['spearman_cheap_true']:.2f}, edge-hit "
+                  f"{payload['edge_hit_rate']:.2f} vs {payload['random_edge_hit_rate']:.2f})")
     axA.legend(loc="upper left")
 
-    # Panel B: distribution of violations K per problem
-    K = np.array(agg["K"], int)
-    if K.size:
-        bins = np.arange(0, K.max() + 2) - 0.5
-        axB.hist(K, bins=bins, color=PALETTE["green"], alpha=0.8, rwidth=0.9)
-        axB.axvline(K.mean(), color=PALETTE["red"], ls="--", lw=2,
-                    label=f"mean $\\bar K$={K.mean():.2f}")
-    axB.set_xlabel(f"pivotal steps per problem $K$ (sibling value spread $>\\tau={agg['tau']}$)")
-    axB.set_ylabel("number of problems")
-    axB.set_title(f"Few violations per problem (of $\\leq{payload['max_steps']}$ steps)")
-    axB.legend(loc="upper right")
+    # Panel B: distribution of sibling true-value spreads (the "violation size" spectrum)
+    spreads = np.asarray(agg["sibling_spreads"])
+    if spreads.size:
+        axB.hist(spreads, bins=np.linspace(0, 1, 11), color=PALETTE["green"], alpha=0.8,
+                 rwidth=0.9)
+        for t, v in agg["K_by_tau"].items():
+            axB.axvline(t, color=PALETTE["gray"], ls=":", lw=1)
+            axB.text(t, axB.get_ylim()[1] * 0.9, f" {100 * v:.0f}%>$\\tau$", fontsize=7,
+                     color=PALETTE["gray"])
+    axB.set_xlabel("sibling true-value spread per step (max $-$ min)")
+    axB.set_ylabel("number of steps")
+    axB.set_title("Most steps are smooth; few are pivotal (violations)")
 
-    fig.suptitle(f"Reasoning value function is almost tree-$K$-Lipschitz "
-                 f"({n_problems} {bench.upper()}, model {model})")
+    fig.suptitle(f"Reasoning value function: tree-Lipschitz backbone + few violations "
+                 f"({n_problems} {bench.upper()}, {model})")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     return str(save_figure(fig, f"reasoning_tree_lipschitz_{bench}"))
 
@@ -210,8 +231,10 @@ def main() -> None:
     ap.add_argument("--model", default="us.meta.llama3-1-8b-instruct-v1:0")
     ap.add_argument("--branching", type=int, default=3)
     ap.add_argument("--n-steps", type=int, default=6)
-    ap.add_argument("--rollouts", type=int, default=4, help="rollouts per node (true-value est.)")
-    ap.add_argument("--tau", type=float, default=0.5, help="sibling value spread => pivotal step")
+    ap.add_argument("--rollouts", type=int, default=8,
+                    help="rollouts per node: more = less-noisy true-value estimate (>=8 advised)")
+    ap.add_argument("--tau", type=float, default=0.5,
+                    help="reference pivotal-step threshold (a sweep is always reported too)")
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="")
