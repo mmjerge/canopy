@@ -159,20 +159,26 @@ def _rollout(
     budget: Budget,
     horizon: int,
     seed0: int,
+    obs0: str = "",
 ) -> float:
     """Roll a cheap policy out to ``horizon`` from ``env``'s current state; return last reward.
 
     This is the cheap, biased value probe: a short self-play rollout whose terminal reward
-    estimates the value of the state it started from. Charges one policy call per step.
+    estimates the value of the state it started from. The rollout policy is given the running
+    observation (starting from ``obs0``, the observation at the rollout's initial state), so it
+    can act on the actual state -- essential for real environments where actions are not
+    self-describing (e.g. ALFWorld); without it the rollout is blind and its value is noise.
+    Charges one policy call per step.
     """
     reward = 0.0
+    obs = obs0
     for k in range(horizon):
         actions = env.valid_actions()
         if not actions:
             break
-        a = act("", actions, seed0 + k)
+        a = act(obs, actions, seed0 + k)
         budget.charge(a)
-        _obs, reward, done = env.step(a)
+        obs, reward, done = env.step(a)
         if done:
             break
     return reward
@@ -257,7 +263,7 @@ def value_guided_episode(
         best_a, best_val = candidates[0], -float("inf")
         for ci, a in enumerate(candidates):
             sim = env.clone()
-            _o, r_imm, done = sim.step(a)
+            cand_obs, r_imm, done = sim.step(a)
             if done:
                 val = r_imm
             else:
@@ -270,6 +276,7 @@ def value_guided_episode(
                         budget,
                         rollout_horizon,
                         seed0=90_000 + 1000 * (step * branching + ci) + 50 * rr,
+                        obs0=cand_obs,
                     )
                 val = acc / max(1, rollouts)
             if val > best_val:

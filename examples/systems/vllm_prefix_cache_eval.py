@@ -92,7 +92,7 @@ def start_server(model, port, enable_prefix_caching, gpu_mem_util, extra_args):
     cmd = [
         sys.executable, "-m", "vllm.entrypoints.openai.api_server",
         "--model", model, "--port", str(port), flag,
-        "--gpu-memory-utilization", str(gpu_mem_util), "--disable-log-requests",
+        "--gpu-memory-utilization", str(gpu_mem_util),
     ] + list(extra_args)
     print("launching:", " ".join(cmd), flush=True)
     return subprocess.Popen(cmd)
@@ -296,6 +296,8 @@ def main() -> None:
     ap.add_argument("--max-tokens", type=int, default=64)
     ap.add_argument("--concurrency", type=int, default=32)
     ap.add_argument("--gpu-memory-utilization", type=float, default=0.90)
+    ap.add_argument("--max-model-len", type=int, default=4096,
+                    help="cap context length; keeps small KV-block budgets viable in the sweep")
     ap.add_argument("--shift", action="store_true", help="permute template popularity at the midpoint")
     ap.add_argument("--kv-block-sweep", default="",
                     help="comma-separated --num-gpu-blocks-override values; sweeps the KV budget "
@@ -377,7 +379,8 @@ def run_budget_sweep(args, trace):
             points.append({"blocks": nb, **agg})
             continue
         proc = start_server(args.model, args.port, True, args.gpu_memory_utilization,
-                            list(args.extra_arg) + ["--num-gpu-blocks-override", str(nb)])
+                            list(args.extra_arg) + ["--max-model-len", str(args.max_model_len),
+                                                    "--num-gpu-blocks-override", str(nb)])
         try:
             if not wait_ready(base_url):
                 print(f"[error] server (blocks={nb}) not ready; skipping."); continue
@@ -421,7 +424,8 @@ def _write_budget(model, points):
         fig, ax = plt.subplots(figsize=(6.4, 4.4))
         ax.plot(b, [p["ttft_p50"] for p in points], "o-", color=PALETTE["red"], label="TTFT p50 (s)")
         ax.set_xlabel("KV-cache budget (blocks)")
-        ax.set_ylabel("TTFT p50 (s)")
+        ax.set_ylabel("TTFT p50 (s, log scale)")
+        ax.set_yscale("log")
         ax2 = ax.twinx()
         ax2.plot(b, [(p.get("prefix_cache_hit_rate") or 0) for p in points], "s--",
                  color=PALETTE["blue"], label="hit rate")
