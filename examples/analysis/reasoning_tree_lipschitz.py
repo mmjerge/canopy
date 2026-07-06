@@ -47,6 +47,11 @@ from canopy.bandits.reasoning_llm import (  # noqa: E402
     value_guided_search,
 )
 
+try:
+    from tqdm import tqdm
+except Exception:  # noqa: BLE001
+    tqdm = None
+
 FIGDIR = HERE.parents[2] / "paper" / "figures"
 
 
@@ -91,7 +96,8 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     per_problem_steps = []
     path_value_by_step = [[] for _ in range(n_steps)]  # chosen-candidate true value per step
     eps = 1.0 / max(1, rollouts) / 2.0        # ties within one rollout's resolution
-    for q, gold in problems:
+    bar = tqdm(total=len(problems), unit="prob", desc="reasoning-tree") if tqdm else None
+    for i, (q, gold) in enumerate(problems, 1):
         trace: list[dict] = []
         try:
             value_guided_search(
@@ -116,6 +122,15 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
             edge_gaps.append(float(tv.max() - cheap_pick_true))
             path_value_by_step[step].append(chosen_true)
         per_problem_steps.append(len(by_step))
+        if bar is not None:
+            hr = float(np.mean(edge_hits)) if edge_hits else 0.0
+            sp = float(np.mean(sibling_spreads)) if sibling_spreads else 0.0
+            bar.set_postfix_str(f"edge-hit={hr:.2f} mean-spread={sp:.2f}")
+            bar.update(1)
+        else:
+            print(f"  [{i}/{len(problems)}] nodes so far={len(all_cheap)}", flush=True)
+    if bar is not None:
+        bar.close()
     spreads = np.array(sibling_spreads)
     return {
         "cheap": all_cheap, "true": all_true,
