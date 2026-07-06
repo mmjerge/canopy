@@ -80,24 +80,53 @@ def _spearman(x, y):
 TAU_SWEEP = [0.25, 0.5, 0.75]  # sibling true-value spreads counted as "pivotal" (violation)
 
 
-def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_error):
-    """Run value-guided search with tree logging over problems; return aggregated records.
+def _one_problem(q, gold, generate, cfg, extract_fn, grade_fn, eps):
+    """Run value-guided search on one problem and return its per-step contributions.
+
+    Independent of every other problem, so many of these run concurrently. Different problems
+    have different prompts, so their cache keys don't collide; the search *within* a problem is
+    sequential (each step depends on the chosen prefix).
+    """
+    branching, n_steps, rollouts = cfg
+    trace: list[dict] = []
+    value_guided_search(
+        q, gold, generate, branching=branching, n_steps=n_steps, rollouts=rollouts,
+        final_rollouts=rollouts, extract_fn=extract_fn, grade_fn=grade_fn, trace_log=trace,
+    )
+    by_step: dict[int, list[dict]] = {}
+    cheap, true = [], []
+    for rec in trace:
+        cheap.append(rec["cheap_value"]); true.append(rec["true_value"])
+        by_step.setdefault(rec["step"], []).append(rec)
+    spreads, ehits, egaps, pv = [], [], [], {}
+    for step, recs in by_step.items():
+        tv = np.array([r["true_value"] for r in recs])
+        cv = np.array([r["cheap_value"] for r in recs])
+        spreads.append(float(tv.max() - tv.min()))
+        ehits.append(float(tv[int(cv.argmax())] >= tv.max() - eps))
+        egaps.append(float(tv.max() - tv[int(cv.argmax())]))
+        pv[step] = next(r["true_value"] for r in recs if r["chosen"])
+    return {"cheap": cheap, "true": true, "spreads": spreads, "ehits": ehits,
+            "egaps": egaps, "pv": pv, "nsteps": len(by_step)}
+
+
+def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_error, workers=8):
+    """Run value-guided search with tree logging over problems (in parallel); aggregate records.
 
     Beyond the cheap-vs-true correlation, we record the metric that directly tests the value
     edge: at each step, whether the highest-*cheap*-value sibling is also a highest-*true*-value
     sibling (``edge_hit``), and the true value lost by following the cheap edge instead of the
-    best sibling (``edge_gap``). These are robust to the coarse value grid that attenuates a
-    linear correlation, and they are exactly what value-guided search relies on.
+    best sibling (``edge_gap``). Problems run on a thread pool (``workers``): the model calls are
+    I/O-bound, so this is a near-linear speedup, and the per-call progress bar is updated from a
+    thread-safe wrapper.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     branching, n_steps, rollouts = cfg
-    all_cheap, all_true = [], []
-    sibling_spreads = []                      # per-step max-min true value across siblings
-    edge_hits, edge_gaps = [], []             # per-step: cheap-argmax is true-argmax? gap?
+    all_cheap, all_true, sibling_spreads, edge_hits, edge_gaps = [], [], [], [], []
     per_problem_steps = []
-    path_value_by_step = [[] for _ in range(n_steps)]  # chosen-candidate true value per step
-    eps = 1.0 / max(1, rollouts) / 2.0        # ties within one rollout's resolution
-    # each problem issues exactly this many generation calls (no early stop), so a per-call bar
-    # moves smoothly through the ~b*steps*(1+rollouts) calls a single problem takes.
+    path_value_by_step = [[] for _ in range(n_steps)]
+    eps = 1.0 / max(1, rollouts) / 2.0
     calls_per_problem = n_steps * branching * (1 + rollouts) + rollouts
     bar = (tqdm(total=len(problems) * calls_per_problem, unit="call", desc="reasoning-tree")
            if tqdm else None)
@@ -105,40 +134,29 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     def gen(prompt, max_tokens, seed):
         out = generate(prompt, max_tokens, seed)
         if bar is not None:
-            bar.update(1)
+            bar.update(1)  # tqdm.update is thread-safe
         return out
 
-    for i, (q, gold) in enumerate(problems, 1):
-        trace: list[dict] = []
-        try:
-            value_guided_search(
-                q, gold, gen, branching=branching, n_steps=n_steps, rollouts=rollouts,
-                final_rollouts=rollouts, extract_fn=extract_fn, grade_fn=grade_fn,
-                trace_log=trace,
-            )
-        except budget_error:
-            raise
-        by_step: dict[int, list[dict]] = {}
-        for rec in trace:
-            all_cheap.append(rec["cheap_value"]); all_true.append(rec["true_value"])
-            by_step.setdefault(rec["step"], []).append(rec)
-        for step, recs in by_step.items():
-            tv = np.array([r["true_value"] for r in recs])
-            cv = np.array([r["cheap_value"] for r in recs])
-            sibling_spreads.append(float(tv.max() - tv.min()))
-            chosen_true = next(r["true_value"] for r in recs if r["chosen"])
-            # edge-following: does the cheap-argmax sibling reach (near) the best true value?
-            cheap_pick_true = tv[int(cv.argmax())]
-            edge_hits.append(float(cheap_pick_true >= tv.max() - eps))
-            edge_gaps.append(float(tv.max() - cheap_pick_true))
-            path_value_by_step[step].append(chosen_true)
-        per_problem_steps.append(len(by_step))
-        if bar is not None:
-            hr = float(np.mean(edge_hits)) if edge_hits else 0.0
-            sp = float(np.mean(sibling_spreads)) if sibling_spreads else 0.0
-            bar.set_postfix_str(f"{i}/{len(problems)} prob, edge-hit={hr:.2f} spread={sp:.2f}")
-        else:
-            print(f"  [{i}/{len(problems)}] nodes so far={len(all_cheap)}", flush=True)
+    done = 0
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        futures = {ex.submit(_one_problem, q, gold, gen, cfg, extract_fn, grade_fn, eps): (q, gold)
+                   for q, gold in problems}
+        for fut in as_completed(futures):
+            try:
+                r = fut.result()
+            except budget_error:
+                break  # spend/call cap hit; aggregate whatever finished
+            all_cheap += r["cheap"]; all_true += r["true"]
+            sibling_spreads += r["spreads"]; edge_hits += r["ehits"]; edge_gaps += r["egaps"]
+            for step, v in r["pv"].items():
+                path_value_by_step[step].append(v)
+            per_problem_steps.append(r["nsteps"])
+            done += 1
+            if bar is not None:
+                hr = float(np.mean(edge_hits)) if edge_hits else 0.0
+                sp = float(np.mean(sibling_spreads)) if sibling_spreads else 0.0
+                bar.set_postfix_str(f"{done}/{len(problems)} prob, edge-hit={hr:.2f} "
+                                    f"spread={sp:.2f}")
     if bar is not None:
         bar.close()
     spreads = np.array(sibling_spreads)
@@ -260,6 +278,8 @@ def main() -> None:
                     help="rollouts per node: more = less-noisy true-value estimate (>=8 advised)")
     ap.add_argument("--tau", type=float, default=0.5,
                     help="reference pivotal-step threshold (a sweep is always reported too)")
+    ap.add_argument("--workers", type=int, default=8,
+                    help="problems to run concurrently (I/O-bound; ~linear speedup)")
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="")
@@ -303,9 +323,10 @@ def main() -> None:
 
     print(f"{args.benchmark.upper()} reasoning-tree characterization: {len(problems)} problems, "
           f"model {model_label}, branching {args.branching}, {args.n_steps} steps, "
-          f"{args.rollouts} rollouts/node")
+          f"{args.rollouts} rollouts/node, {args.workers} workers")
     try:
-        agg = characterize(problems, generate, cfg, extract_fn, grade_fn, args.tau, budget_error)
+        agg = characterize(problems, generate, cfg, extract_fn, grade_fn, args.tau,
+                           budget_error, workers=args.workers)
     except budget_error as e:
         print(f"[budget stop] {e}")
         return
