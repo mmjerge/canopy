@@ -60,8 +60,13 @@ class OpenAIClient:
         prompt: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> Generation:
-        """Return ``(response_text, input_tokens, output_tokens)`` for one prompt."""
+        """Return ``(response_text, input_tokens, output_tokens)`` for one prompt.
+
+        ``seed`` distinguishes independent same-prompt samples for caching; OpenAI supports a
+        request ``seed``, so it is forwarded (best-effort reproducibility) as well.
+        """
         kwargs: dict = {
             "model": model_id,
             "messages": [{"role": "user", "content": prompt}],
@@ -69,6 +74,8 @@ class OpenAIClient:
         }
         if temperature is not None:
             kwargs["temperature"] = temperature
+        if seed is not None:
+            kwargs["seed"] = seed
         resp = self._client.chat.completions.create(**kwargs)
         text = resp.choices[0].message.content or ""
         usage = resp.usage

@@ -35,8 +35,16 @@ class LLMClient(Protocol):
         prompt: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> Generation:
-        """Return ``(text, input_tokens, output_tokens)`` for one prompt."""
+        """Return ``(text, input_tokens, output_tokens)`` for one prompt.
+
+        ``seed`` distinguishes independent samples of the *same* prompt (e.g. self-consistency
+        or the branching candidates of value-guided search). Providers sample stochastically at
+        ``temperature`` regardless, but ``seed`` must reach any response cache so that repeated
+        same-prompt draws are kept as distinct samples rather than collapsing to one cached
+        completion (which would silently defeat sampling-based methods).
+        """
         ...
 
     def price_per_1k(self, model_id: str) -> tuple[float, float]:
@@ -52,14 +60,16 @@ def as_generate_fn(
     """Adapt an :class:`LLMClient` to the reasoning harness's ``(prompt, max_tokens, seed)``.
 
     The reasoning-search strategies in :mod:`canopy.bandits.reasoning_llm` take a plain
-    ``generate(prompt, max_tokens, seed) -> text`` callable. Providers don't all honor an
-    integer ``seed``; diversity across calls comes from sampling at ``temperature`` instead,
-    so ``seed`` is accepted (for signature compatibility) but not forwarded.
+    ``generate(prompt, max_tokens, seed) -> text`` callable. The ``seed`` is forwarded so that a
+    response cache keys each independent same-prompt sample separately: providers sample at
+    ``temperature``, but without a per-sample key a cache would serve the first draw for every
+    call, collapsing the ``branching`` candidates and best-of-N samples to one and silently
+    defeating the search / self-consistency being measured.
     """
 
     def generate(prompt: str, max_tokens: int, seed: int) -> str:
         text, _, _ = client.generate(
-            model_id, prompt, temperature=temperature, max_tokens=max_tokens
+            model_id, prompt, temperature=temperature, max_tokens=max_tokens, seed=seed
         )
         return text
 
@@ -120,6 +130,7 @@ class MockLLMClient:
         prompt: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        seed: int | None = None,
     ) -> Generation:
         text = self._responder(model_id, prompt)
         if max_tokens is not None:
