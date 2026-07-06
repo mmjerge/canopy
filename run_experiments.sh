@@ -32,6 +32,8 @@ CAP_MMLU="${CAP_MMLU:-8}"
 CAP_TRIM="${CAP_TRIM:-8}"
 CAP_TAUBENCH="${CAP_TAUBENCH:-30}"
 CAP_ALFWORLD="${CAP_ALFWORLD:-20}"
+CAP_REASON_TREE="${CAP_REASON_TREE:-30}"
+N_REASON_TREE="${N_REASON_TREE:-100}"
 # Sample sizes + reasoning model (bumped for robust results; override freely).
 N_MATH="${N_MATH:-300}"
 N_GSM8K="${N_GSM8K:-200}"
@@ -80,6 +82,7 @@ if [ "$GROUP" = "ALL" ] || [ "$GROUP" = "A" ]; then
   launch tree_infinite   "$PY" examples/tree_bandits/infinite_depth_demo.py
   launch routerbench     "$PY" examples/llm_routing/routerbench_routing.py
   launch prefix_cache    "$PY" examples/llm_routing/prefix_cache.py --dataset tatsu-lab/alpaca --n-prompts 20000
+  launch theory_link     "$PY" examples/analysis/theory_link.py
 fi
 
 # --- Group B: Bedrock (spend-capped, resumable) ---------------------------------------------
@@ -97,6 +100,11 @@ if [ "$GROUP" = "ALL" ] || [ "$GROUP" = "B" ]; then
   launch taubench        "$PY" examples/agentic/taubench_routing.py \
     --env retail --num-tasks 80 --trials 1 --max-spend "$CAP_TAUBENCH" --resume \
     --models "$MODELS" --user-model "$USER_MODEL"
+  # reasoning-tree "almost tree-K-Lipschitz" characterization (flagship prior on real traces);
+  # shares the reasoning_math response cache, so it is mostly free after reasoning_math runs.
+  launch reasoning_tree  "$PY" examples/analysis/reasoning_tree_lipschitz.py \
+    --benchmark math --model "$REASON_MODEL" --n-problems "$N_REASON_TREE" \
+    --branching 3 --n-steps 6 --rollouts 4 --max-spend "$CAP_REASON_TREE"
 fi
 
 # --- Group C: ALFWorld (separate env; only if configured) -----------------------------------
