@@ -96,12 +96,23 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     per_problem_steps = []
     path_value_by_step = [[] for _ in range(n_steps)]  # chosen-candidate true value per step
     eps = 1.0 / max(1, rollouts) / 2.0        # ties within one rollout's resolution
-    bar = tqdm(total=len(problems), unit="prob", desc="reasoning-tree") if tqdm else None
+    # each problem issues exactly this many generation calls (no early stop), so a per-call bar
+    # moves smoothly through the ~b*steps*(1+rollouts) calls a single problem takes.
+    calls_per_problem = n_steps * branching * (1 + rollouts) + rollouts
+    bar = (tqdm(total=len(problems) * calls_per_problem, unit="call", desc="reasoning-tree")
+           if tqdm else None)
+
+    def gen(prompt, max_tokens, seed):
+        out = generate(prompt, max_tokens, seed)
+        if bar is not None:
+            bar.update(1)
+        return out
+
     for i, (q, gold) in enumerate(problems, 1):
         trace: list[dict] = []
         try:
             value_guided_search(
-                q, gold, generate, branching=branching, n_steps=n_steps, rollouts=rollouts,
+                q, gold, gen, branching=branching, n_steps=n_steps, rollouts=rollouts,
                 final_rollouts=rollouts, extract_fn=extract_fn, grade_fn=grade_fn,
                 trace_log=trace,
             )
@@ -125,8 +136,7 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
         if bar is not None:
             hr = float(np.mean(edge_hits)) if edge_hits else 0.0
             sp = float(np.mean(sibling_spreads)) if sibling_spreads else 0.0
-            bar.set_postfix_str(f"edge-hit={hr:.2f} mean-spread={sp:.2f}")
-            bar.update(1)
+            bar.set_postfix_str(f"{i}/{len(problems)} prob, edge-hit={hr:.2f} spread={sp:.2f}")
         else:
             print(f"  [{i}/{len(problems)}] nodes so far={len(all_cheap)}", flush=True)
     if bar is not None:
