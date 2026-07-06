@@ -68,13 +68,35 @@ def _pearson(x, y):
     return float(np.corrcoef(x, y)[0, 1])
 
 
+def _rankdata(a):
+    """Ranks with ties averaged (order-invariant), so Spearman is well-defined on the coarse
+    value grid where many nodes tie (positional tie-breaking would make it depend on data order)."""
+    a = np.asarray(a, float)
+    order = a.argsort(kind="stable")
+    ranks = np.empty(len(a), float)
+    sorted_a = a[order]
+    i = 0
+    while i < len(a):
+        j = i
+        while j + 1 < len(a) and sorted_a[j + 1] == sorted_a[i]:
+            j += 1
+        ranks[order[i:j + 1]] = (i + j) / 2.0  # average rank for the tie group
+        i = j + 1
+    return ranks
+
+
 def _spearman(x, y):
-    def rank(a):
-        order = np.argsort(a, kind="stable")
-        r = np.empty_like(order, dtype=float)
-        r[order] = np.arange(len(a))
-        return r
-    return _pearson(rank(np.asarray(x, float)), rank(np.asarray(y, float)))
+    return _pearson(_rankdata(x), _rankdata(y))
+
+
+def _bootstrap_ci(mask_values, iters=2000, seed=0):
+    """Mean and 95% CI of a 0/1 (or real) array via bootstrap; ``(nan,nan,nan)`` if empty."""
+    a = np.asarray(mask_values, float)
+    if a.size == 0:
+        return float("nan"), float("nan"), float("nan")
+    rng = np.random.default_rng(seed)
+    means = a[rng.integers(0, a.size, size=(iters, a.size))].mean(axis=1)
+    return float(a.mean()), float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))
 
 
 TAU_SWEEP = [0.25, 0.5, 0.75]  # sibling true-value spreads counted as "pivotal" (violation)
@@ -167,12 +189,13 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     # whose siblings are ~equal (any pick trivially "hits"), so we report both.
     pivotal = spreads > tau
     n_piv = int(pivotal.sum())
+    piv_mean, piv_lo, piv_hi = _bootstrap_ci(ehits[pivotal]) if n_piv else (float("nan"),) * 3
     return {
         "cheap": all_cheap, "true": all_true,
         "sibling_spreads": sibling_spreads,
         "edge_hit_rate": float(ehits.mean()) if ehits.size else 0.0,
         "edge_gap": float(egaps.mean()) if egaps.size else 0.0,
-        "edge_hit_pivotal": float(ehits[pivotal].mean()) if n_piv else float("nan"),
+        "edge_hit_pivotal": piv_mean, "edge_hit_pivotal_lo": piv_lo, "edge_hit_pivotal_hi": piv_hi,
         "edge_gap_pivotal": float(egaps[pivotal].mean()) if n_piv else float("nan"),
         "n_pivotal": n_piv, "n_steps_total": int(spreads.size),
         "K_by_tau": {t: float(np.mean(spreads > t)) if spreads.size else 0.0 for t in TAU_SWEEP},
@@ -195,7 +218,10 @@ def _write_outputs(agg, model, bench, n_problems):
         "pearson_cheap_true": r_p, "spearman_cheap_true": r_s,
         "edge_hit_rate": agg["edge_hit_rate"], "random_edge_hit_rate": base,
         "edge_gap": agg["edge_gap"],
-        "edge_hit_pivotal": agg["edge_hit_pivotal"], "edge_gap_pivotal": agg["edge_gap_pivotal"],
+        "edge_hit_pivotal": agg["edge_hit_pivotal"],
+        "edge_hit_pivotal_lo": agg["edge_hit_pivotal_lo"],
+        "edge_hit_pivotal_hi": agg["edge_hit_pivotal_hi"],
+        "edge_gap_pivotal": agg["edge_gap_pivotal"],
         "n_pivotal": agg["n_pivotal"], "n_steps_total": agg["n_steps_total"], "tau": agg["tau"],
         "K_by_tau": agg["K_by_tau"],
         "max_steps": int(steps.max()) if steps.size else 0,
@@ -215,6 +241,7 @@ def _write_outputs(agg, model, bench, n_problems):
         f"Edge-following hit rate, all steps (chance {base:.2f}) & {agg['edge_hit_rate']:.3f} "
         "\\\\\n"
         f"Edge-following hit rate, pivotal steps only & {agg['edge_hit_pivotal']:.3f} "
+        f"[{agg['edge_hit_pivotal_lo']:.2f}, {agg['edge_hit_pivotal_hi']:.2f}] "
         f"($n$={agg['n_pivotal']}) \\\\\n"
         f"Mean true value lost per step (edge gap) & {agg['edge_gap']:.3f} \\\\\n"
         f"Pivotal-step fraction & {ktau} \\\\\n"
@@ -228,7 +255,8 @@ def _write_outputs(agg, model, bench, n_problems):
     print(f"  edge-following hit rate={agg['edge_hit_rate']:.3f} (chance {base:.2f}); "
           f"mean edge gap={agg['edge_gap']:.3f}")
     print(f"  edge-following hit rate on PIVOTAL steps (spread>{agg['tau']})="
-          f"{agg['edge_hit_pivotal']:.3f}  (n={agg['n_pivotal']}/{agg['n_steps_total']}; "
+          f"{agg['edge_hit_pivotal']:.3f} [{agg['edge_hit_pivotal_lo']:.2f}, "
+          f"{agg['edge_hit_pivotal_hi']:.2f}]  (n={agg['n_pivotal']}/{agg['n_steps_total']}; "
           f"gap={agg['edge_gap_pivotal']:.3f})  <- the decisive number")
     print("  pivotal-step fraction: "
           + ", ".join(f"tau={t}:{100 * v:.0f}%" for t, v in agg["K_by_tau"].items()))
