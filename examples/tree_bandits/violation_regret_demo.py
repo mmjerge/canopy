@@ -32,7 +32,7 @@ from canopy.bandits import (  # noqa: E402
     detect_violations,
 )
 from canopy.bandits.rewards import adversarial_spike_leaf_means  # noqa: E402
-from _plotstyle import PALETTE, ci_band, save_figure, set_style  # noqa: E402
+from _plotstyle import PALETTE, ci_band, progress, save_figure, set_style  # noqa: E402
 
 BRANCHING, DEPTH, LEVEL = 4, 5, 3
 BUDGET = 400.0
@@ -61,7 +61,7 @@ def run_all():
     blind = np.zeros((nk, ns))
     hybrid = np.zeros((nk, ns))
     cell = BRANCHING ** (DEPTH - LEVEL)
-    for i, k in enumerate(K_VALUES):
+    for i, k in enumerate(progress(K_VALUES, "violation K", total=len(K_VALUES))):
         for s in range(N_SEEDS):
             lm = adversarial_spike_leaf_means(BRANCHING, DEPTH, k, rng=np.random.default_rng(s))
             e = env_for(lm, 40 + s)

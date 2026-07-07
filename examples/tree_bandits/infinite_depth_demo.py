@@ -12,12 +12,16 @@ Run with:  uv run --extra plot python examples/tree_bandits/infinite_depth_demo.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from canopy.bandits import TreeBandit, geometric_sigma, hierarchical_spread, run_hoo
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _plotstyle import progress  # noqa: E402
 
 BRANCHING = 3
 HORIZON = 15000
@@ -29,7 +33,7 @@ SIGMA = geometric_sigma(base=0.5, decay=0.6)
 def main() -> None:
     total_nodes, mem, mem_std, regret = [], [], [], []
     curves = {}
-    for depth in DEPTHS:
+    for depth in progress(DEPTHS, "infinite-depth", total=len(DEPTHS)):
         spread = hierarchical_spread(SIGMA, depth, BRANCHING, z=3.0)
         mems, regs, cs = [], [], []
         for seed in range(N_SEEDS):

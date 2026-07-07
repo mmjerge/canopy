@@ -29,7 +29,7 @@ import numpy as np
 from canopy.bandits import PrefixTreeRouting, run_router
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from _plotstyle import FIGURE_DIR, PALETTE, save_figure, set_style  # noqa: E402
+from _plotstyle import FIGURE_DIR, PALETTE, progress, save_figure, set_style  # noqa: E402
 
 ALL_SUBJECTS = [
     "elementary_mathematics",
@@ -138,7 +138,9 @@ def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoi
 
     try:
         for lvl in range(N_TRIM):
-            for qi, (q, choices, ans) in enumerate(items):
+            for qi, (q, choices, ans) in enumerate(
+                progress(items, f"trim {lvl}/{N_TRIM - 1}", total=len(items))
+            ):
                 if done[lvl, qi]:
                     continue
                 try:

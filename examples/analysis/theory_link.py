@@ -52,7 +52,7 @@ from canopy.bandits.rewards import (  # noqa: E402
     geometric_sigma,
     hierarchical_gaussian_leaf_means,
 )
-from _plotstyle import FIGURE_DIR, PALETTE, ci_band, save_figure, set_style  # noqa: E402
+from _plotstyle import FIGURE_DIR, PALETTE, ci_band, progress, save_figure, set_style  # noqa: E402
 
 HORIZONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000]
 N_SEEDS = 8
@@ -130,7 +130,7 @@ def sublinear_regret_curve():
     )
     spread = lipschitz_spread(SPREAD_L, SPREAD_RHO)
     regrets = np.zeros((len(HORIZONS), N_SEEDS))
-    for j, n in enumerate(HORIZONS):
+    for j, n in enumerate(progress(HORIZONS, "sublinear-rate horizons", total=len(HORIZONS))):
         for s in range(N_SEEDS):
             env = TreeBandit(BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1,
                              rng=np.random.default_rng(1000 + s))

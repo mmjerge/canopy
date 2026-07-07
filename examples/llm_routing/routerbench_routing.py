@@ -24,7 +24,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import matplotlib.pyplot as plt  # noqa: E402
 
-from _plotstyle import PALETTE, save_figure, set_style  # noqa: E402
+from _plotstyle import PALETTE, progress, save_figure, set_style  # noqa: E402
 
 LAMBDAS = [0.0, 0.1, 0.2, 0.35, 0.5, 0.75, 1.0, 1.5]
 N_SEEDS = 8
@@ -106,7 +106,7 @@ def main() -> None:
 
     rq, rq_err, rc, oracle_q = [], [], [], []
     print("\nlam   router quality         router cost    (oracle q)")
-    for lam in LAMBDAS:
+    for lam in progress(LAMBDAS, "routerbench lambda", total=len(LAMBDAS)):
         res = np.array(
             [
                 learn_and_eval(quality, cost, cost_norm, regions, lam, np.random.default_rng(s))

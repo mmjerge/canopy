@@ -68,6 +68,20 @@ def save_figure(fig, name: str) -> Path:
     return FIGURE_DIR / f"{name}.pdf"
 
 
+def progress(iterable, desc="", total=None):
+    """Wrap ``iterable`` in a tqdm progress bar if tqdm is installed, else return it unchanged.
+
+    A single dependency-optional helper so every demo can show progress without hard-requiring
+    tqdm. Use as ``for x in progress(items, "seeds"):``.
+    """
+    try:
+        from tqdm import tqdm
+
+        return tqdm(iterable, desc=desc, total=total, unit="it", leave=True)
+    except Exception:  # noqa: BLE001 -- tqdm absent: silent fallback
+        return iterable
+
+
 def ci_band(ax, x, samples, color, label=None, marker="o"):
     """Plot the mean over seeds with a shaded 95% confidence band.
 

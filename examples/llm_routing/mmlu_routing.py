@@ -14,9 +14,13 @@ per-model results to mmlu_routing.npz.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _plotstyle import progress  # noqa: E402
 
 from canopy.bandits import PrefixTreeRouting, run_router
 from canopy.llm import DEFAULT_PRICING, BedrockClient, BudgetError, CachingLLMClient
@@ -212,7 +216,7 @@ def main() -> None:
                 row = np.zeros(n)
                 cost = 0.0
                 ok = True
-                for pi, prompt in enumerate(prompts):
+                for pi, prompt in enumerate(progress(prompts, model.split(".")[-1][:18], total=n)):
                     try:
                         text, it, ot = client.generate(model, prompt, max_tokens=mt)
                         row[pi] = 1.0 if parse_letter(text) == answers[pi] else 0.0

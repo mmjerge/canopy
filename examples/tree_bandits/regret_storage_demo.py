@@ -30,7 +30,7 @@ from canopy.bandits import (  # noqa: E402
     run_adaptive_variance,
     run_fixed_depth,
 )
-from _plotstyle import PALETTE, ci_band, save_figure, set_style  # noqa: E402
+from _plotstyle import PALETTE, ci_band, progress, save_figure, set_style  # noqa: E402
 
 BRANCHING, DEPTH = 4, 4  # 256 leaves
 HORIZON = 12000
@@ -50,7 +50,7 @@ def run_all():
     adaptive, var = [], []
     fixed = {d: [] for d in depths}
     amem, vmem, fmem = [], [], {d: 0 for d in depths}
-    for seed in range(N_SEEDS):
+    for seed in progress(range(N_SEEDS), "regret seeds", total=N_SEEDS):
         rng = lambda: np.random.default_rng(10_000 + seed)  # noqa: E731
         r = run_adaptive(make_env(seed), HORIZON, SPREAD, rng())
         adaptive.append(r.cum_regret)

@@ -37,7 +37,7 @@ import numpy as np
 from canopy.bandits import PrefixCacheEnv, run_cache
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from _plotstyle import FIGURE_DIR, PALETTE, save_figure, set_style  # noqa: E402
+from _plotstyle import FIGURE_DIR, PALETTE, progress, save_figure, set_style  # noqa: E402
 
 POLICIES = ["lru", "lfu", "adaptive", "offline"]
 PALETTE_BY = {
@@ -140,7 +140,7 @@ def make_shift_stream(stream, rng):
 
 def run_stationary(stream, budgets, decay=0.995):
     out = {p: [] for p in POLICIES}
-    for b in budgets:
+    for b in progress(budgets, "cache budgets", total=len(budgets)):
         for p in POLICIES:
             out[p].append(run_cache(stream, b, policy=p, decay=decay).avg_savings)
     return out
