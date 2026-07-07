@@ -151,6 +151,7 @@ def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, worke
     bo_hits, vg_hits = [], []
     bo_calls = vg_calls = 0
     hit_budget = None
+    skipped = 0
     bar = tqdm(total=len(problems), unit="prob", desc=f"budget {bo_n}") if tqdm else None
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futs = [ex.submit(_one, q, gold) for q, gold in problems]
@@ -160,6 +161,13 @@ def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, worke
             except budget_error as e:  # noqa: PERF203
                 hit_budget = e
                 continue
+            except Exception as e:  # noqa: BLE001 -- a problem that failed even after client
+                skipped += 1                       # retries: drop it rather than crash the level
+                if skipped <= 3:
+                    print(f"  [skip problem] {type(e).__name__}: {str(e)[:100]}")
+                if bar is not None:
+                    bar.update(1)
+                continue
             bo_hits.append(bc); vg_hits.append(vc); bo_calls += bca; vg_calls += vca
             if bar is not None:
                 bar.update(1)
@@ -167,6 +175,8 @@ def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, worke
         bar.close()
     if hit_budget is not None:
         raise hit_budget  # discard this (partial) level; caller keeps completed levels
+    if skipped:
+        print(f"  ({skipped}/{len(problems)} problems skipped after retries at budget {bo_n})")
     n = max(1, len(bo_hits))
     return {
         "matched_budget": bo_n,

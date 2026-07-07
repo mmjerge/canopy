@@ -11,9 +11,23 @@ also be enabled in the Bedrock console.
 
 from __future__ import annotations
 
+import random
+import time
 from typing import Any
 
 from canopy.llm.base import Generation
+
+# Transient Bedrock errors worth retrying with backoff (vs. a hard config/access error). Matched
+# by exception class name so we need not import each botocore error factory type.
+_TRANSIENT_ERRORS = frozenset({
+    "ThrottlingException",
+    "ModelTimeoutException",
+    "ServiceUnavailableException",
+    "InternalServerException",
+    "ModelNotReadyException",
+    "ServiceQuotaExceededException",
+    "TooManyRequestsException",
+})
 
 # Approximate USD price per 1K tokens (input, output); override as needed / per region.
 DEFAULT_PRICING: dict[str, tuple[float, float]] = {
@@ -53,10 +67,12 @@ class BedrockClient:
         max_tokens: int = 512,
         pricing: dict[str, tuple[float, float]] | None = None,
         runtime: Any | None = None,
+        max_retries: int = 6,
     ) -> None:
         self.max_tokens = max_tokens
         self.pricing = pricing or DEFAULT_PRICING
         self.region = region
+        self.max_retries = max_retries
         if runtime is not None:
             self.runtime = runtime
             return
@@ -95,11 +111,21 @@ class BedrockClient:
         cfg: dict = {"maxTokens": max_tokens or self.max_tokens}
         if temperature is not None:
             cfg["temperature"] = temperature
-        resp = self.runtime.converse(
-            modelId=model_id,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig=cfg,
-        )
+        # Bedrock throttles and occasionally times out under load; retry transient errors with
+        # exponential backoff + jitter so one flaky call doesn't abort a long experiment run.
+        resp = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self.runtime.converse(
+                    modelId=model_id,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig=cfg,
+                )
+                break
+            except Exception as e:  # noqa: BLE001
+                if type(e).__name__ not in _TRANSIENT_ERRORS or attempt == self.max_retries:
+                    raise
+                time.sleep(min(2.0**attempt + random.random(), 30.0))
         blocks = resp.get("output", {}).get("message", {}).get("content", [])
         # Concatenate all text blocks; reasoning models (e.g. DeepSeek R1) also emit
         # non-text "reasoningContent" blocks, which carry no "text" key and are skipped.

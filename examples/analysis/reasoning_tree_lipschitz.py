@@ -160,6 +160,7 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
         return out
 
     done = 0
+    skipped = 0
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futures = {ex.submit(_one_problem, q, gold, gen, cfg, extract_fn, grade_fn, eps): (q, gold)
                    for q, gold in problems}
@@ -168,6 +169,11 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
                 r = fut.result()
             except budget_error:
                 break  # spend/call cap hit; aggregate whatever finished
+            except Exception as e:  # noqa: BLE001 -- drop a problem that failed even after retries
+                skipped += 1
+                if skipped <= 3:
+                    print(f"  [skip problem] {type(e).__name__}: {str(e)[:100]}")
+                continue
             all_cheap += r["cheap"]; all_true += r["true"]
             sibling_spreads += r["spreads"]; edge_hits += r["ehits"]; edge_gaps += r["egaps"]
             for step, v in r["pv"].items():
