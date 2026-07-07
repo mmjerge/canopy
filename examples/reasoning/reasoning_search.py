@@ -187,11 +187,16 @@ def _bootstrap_ci(hits, iters=2000, seed=0):
     return float(a.mean()), float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))
 
 
-def _write_outputs(results, model, bench, n_problems, quiet=False):
+def _stem(bench, tag=""):
+    """Output basename; a non-empty ``tag`` (e.g. a model label) keeps comparison runs separate."""
+    return f"reasoning_search_{bench}" + (f"_{tag}" if tag else "")
+
+
+def _write_outputs(results, model, bench, n_problems, quiet=False, tag=""):
     if not results:
         return
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    stem = f"reasoning_search_{bench}"
+    stem = _stem(bench, tag)
     (FIGDIR / f"{stem}_results.json").write_text(
         json.dumps({"benchmark": bench, "model": model, "n_problems": n_problems,
                     "levels": results}, indent=2)
@@ -226,13 +231,13 @@ def _write_outputs(results, model, bench, n_problems, quiet=False):
         print(f"  {b:8d} {bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}] "
               f"{vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}] {vg_m - bo_m:+8.3f}")
     try:
-        out = _plot_figure(results, model, bench, n_problems)
+        out = _plot_figure(results, model, bench, n_problems, tag=tag)
         print(f"\nwrote json+table to {FIGDIR} and figure to {out} (+ .png)")
     except Exception as e:  # noqa: BLE001
         print(f"\nwrote json+table to {FIGDIR} (figure skipped: {type(e).__name__}: {e})")
 
 
-def _plot_figure(results, model, bench, n_problems):
+def _plot_figure(results, model, bench, n_problems, tag=""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from _plotstyle import PALETTE, ci_band, save_figure, set_style
 
@@ -258,10 +263,12 @@ def _plot_figure(results, model, bench, n_problems):
     ax.set_xscale("log")
     ax.set_xlabel("matched compute budget (generation calls)")
     ax.set_ylabel(f"{bench.upper()} accuracy")
-    ax.set_title(f"Value-guided vs. best-of-N at matched compute ({n_problems} {bench.upper()})")
+    title_model = model.split(".")[-1][:24]
+    ax.set_title(f"Value-guided vs. best-of-N at matched compute "
+                 f"({n_problems} {bench.upper()}, {title_model})")
     ax.legend(loc="lower right")
     fig.tight_layout()
-    return str(save_figure(fig, stem := f"reasoning_search_{bench}"))
+    return str(save_figure(fig, _stem(bench, tag)))
 
 
 def main() -> None:
@@ -283,6 +290,9 @@ def main() -> None:
                     help="skip budget levels already in the benchmark's results JSON")
     ap.add_argument("--workers", type=int, default=8,
                     help="problems to run concurrently per level (I/O-bound; ~linear speedup)")
+    ap.add_argument("--tag", default="",
+                    help="suffix for output files, e.g. a model label, so runs on different "
+                         "models don't overwrite each other (empty = the headline file names)")
     ap.add_argument("--mock", action="store_true", help="deterministic mock model, no deps/creds")
     args = ap.parse_args()
 
@@ -325,7 +335,7 @@ def main() -> None:
     print(f"{args.benchmark.upper()} reasoning search: {len(problems)} problems, "
           f"model {model_label}, depth sweep {depths}")
 
-    stem = f"reasoning_search_{args.benchmark}"
+    stem = _stem(args.benchmark, args.tag)
     results: dict[str, dict] = {}
     if args.resume:
         rp = FIGDIR / f"{stem}_results.json"
@@ -351,9 +361,10 @@ def main() -> None:
         vg_acc = sum(level["value_guided"]["hits"]) / max(1, level["n_problems"])
         print(f"  [budget {key}] best-of-N acc={bo_acc:.3f}  value-guided acc={vg_acc:.3f}  "
               f"({(time.monotonic() - start) / 60:.1f}m elapsed)")
-        _write_outputs(results, model_label, args.benchmark, len(problems), quiet=True)
+        _write_outputs(results, model_label, args.benchmark, len(problems), quiet=True,
+                       tag=args.tag)
 
-    _write_outputs(results, model_label, args.benchmark, len(problems))
+    _write_outputs(results, model_label, args.benchmark, len(problems), tag=args.tag)
     if client is not None:
         print(f"  budget: {client.stats()}")
 
