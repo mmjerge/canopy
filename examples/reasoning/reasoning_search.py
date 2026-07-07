@@ -41,6 +41,7 @@ import argparse
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from canopy.bandits.reasoning_llm import (
@@ -50,6 +51,11 @@ from canopy.bandits.reasoning_llm import (
     grade_math,
     value_guided_search,
 )
+
+try:
+    from tqdm import tqdm
+except Exception:  # noqa: BLE001
+    tqdm = None
 
 # paper/figures (canopy root is two levels up from examples/reasoning/).
 FIGDIR = Path(__file__).resolve().parents[2] / "paper" / "figures"
@@ -124,25 +130,43 @@ def load_mock_problems(n: int):
     return [(f"Mock problem number {i}: what is {i} plus {i}?", str((2 * i) % 100)) for i in range(n)]
 
 
-def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error):
-    """Run both strategies over all problems at one budget level; return per-problem 0/1 lists."""
+def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, workers=8):
+    """Run both strategies over all problems at one budget level; return per-problem 0/1 lists.
+
+    Problems are independent, so they run on a thread pool (``workers``); the model calls are
+    I/O-bound, giving a near-linear speedup. If a spend/call cap trips mid-level, the whole level
+    is discarded (re-raised) so a partial, biased level is never saved -- the caller resumes it.
+    """
     branching, n_steps, rollouts, final_rollouts = cfg
     bo_n = vg_call_budget(branching, n_steps, rollouts, final_rollouts)
+
+    def _one(q, gold):
+        bo = best_of_n(q, gold, generate, n=bo_n, extract_fn=extract_fn, grade_fn=grade_fn)
+        vg = value_guided_search(
+            q, gold, generate, branching=branching, n_steps=n_steps, rollouts=rollouts,
+            final_rollouts=final_rollouts, extract_fn=extract_fn, grade_fn=grade_fn,
+        )
+        return int(bo.correct), int(vg.correct), bo.budget.calls, vg.budget.calls
+
     bo_hits, vg_hits = [], []
     bo_calls = vg_calls = 0
-    for q, gold in problems:
-        try:
-            bo = best_of_n(q, gold, generate, n=bo_n, extract_fn=extract_fn, grade_fn=grade_fn)
-            vg = value_guided_search(
-                q, gold, generate, branching=branching, n_steps=n_steps, rollouts=rollouts,
-                final_rollouts=final_rollouts, extract_fn=extract_fn, grade_fn=grade_fn,
-            )
-        except budget_error:
-            raise
-        bo_hits.append(int(bo.correct))
-        vg_hits.append(int(vg.correct))
-        bo_calls += bo.budget.calls
-        vg_calls += vg.budget.calls
+    hit_budget = None
+    bar = tqdm(total=len(problems), unit="prob", desc=f"budget {bo_n}") if tqdm else None
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        futs = [ex.submit(_one, q, gold) for q, gold in problems]
+        for fut in as_completed(futs):
+            try:
+                bc, vc, bca, vca = fut.result()
+            except budget_error as e:  # noqa: PERF203
+                hit_budget = e
+                continue
+            bo_hits.append(bc); vg_hits.append(vc); bo_calls += bca; vg_calls += vca
+            if bar is not None:
+                bar.update(1)
+    if bar is not None:
+        bar.close()
+    if hit_budget is not None:
+        raise hit_budget  # discard this (partial) level; caller keeps completed levels
     n = max(1, len(bo_hits))
     return {
         "matched_budget": bo_n,
@@ -257,6 +281,8 @@ def main() -> None:
     ap.add_argument("--cache", default="")
     ap.add_argument("--resume", action="store_true",
                     help="skip budget levels already in the benchmark's results JSON")
+    ap.add_argument("--workers", type=int, default=8,
+                    help="problems to run concurrently per level (I/O-bound; ~linear speedup)")
     ap.add_argument("--mock", action="store_true", help="deterministic mock model, no deps/creds")
     args = ap.parse_args()
 
@@ -315,7 +341,8 @@ def main() -> None:
         if key in results:
             continue
         try:
-            level = run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error)
+            level = run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error,
+                              workers=args.workers)
         except budget_error as e:
             print(f"\n[budget stop] {e}  (completed {i}/{len(depths)} levels)")
             break
