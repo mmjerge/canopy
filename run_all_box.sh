@@ -24,6 +24,13 @@ N_MATH="${N_MATH:-300}"
 N_GSM8K="${N_GSM8K:-200}"
 N_MMLU_TRIALS="${N_MMLU_TRIALS:-20}"
 VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
+# ALFWorld runs in its OWN env (alfworld deps conflict with the main venv). Set ALFWORLD_CONFIG
+# and point ALFWORLD_PY at that env's python; that env must have canopy reinstalled (pip install
+# -e .) so it has the seed-keyed cache fix. ALFWORLD_DATA must be exported (alfworld-download).
+ALFWORLD_PY="${ALFWORLD_PY:-$HOME/alfworld-venv/bin/python}"
+ALFWORLD_CONFIG="${ALFWORLD_CONFIG:-}"
+ALF_MODEL="${ALF_MODEL:-us.anthropic.claude-sonnet-4-5-20250929-v1:0}"
+N_ALF="${N_ALF:-50}"
 mkdir -p logs
 
 # Reasoning model pool as "tag|model_id" (portable; no bash-4 associative arrays needed). The
@@ -107,6 +114,20 @@ if want systems; then
       --model "$VLLM_MODEL" --num-prompts 4000 --pad-tokens 200 --kv-budget 64
   else
     echo "  skipping systems: needs nvidia-smi and vllm importable in $VLLM_PY"
+  fi
+fi
+
+# --- ALFWorld (separate env; opt-in). Re-examines the earlier negative result now that the ------
+# candidate-action sampling collapse (seedless cache) is fixed -- alfworld_search.py now threads
+# the seed, so value-guided finally sees diverse candidate actions.
+if want alfworld; then
+  if [ -n "$ALFWORLD_CONFIG" ] && [ -x "$ALFWORLD_PY" ]; then
+    run alfworld "$ALFWORLD_PY" examples/agentic/alfworld_search.py \
+      --config "$ALFWORLD_CONFIG" --model "$ALF_MODEL" --num-tasks "$N_ALF" --resume
+  else
+    echo "  skipping alfworld: set ALFWORLD_CONFIG=/path/base_config.yaml, ensure \$ALFWORLD_PY"
+    echo "  ($ALFWORLD_PY) exists with canopy reinstalled (pip install -e .), and export"
+    echo "  ALFWORLD_DATA (run alfworld-download). See examples/agentic/alfworld_search.py header."
   fi
 fi
 

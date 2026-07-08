@@ -122,7 +122,10 @@ def make_llm_act(client, model: str):
             f"{numbered}\nReply with only the number of the chosen action."
         )
         try:
-            text, _, _ = client.generate(model, prompt, temperature=0.7, max_tokens=6)
+            # Pass the seed so distinct candidate actions at the same state are independent
+            # samples (the cache keys on seed); without it, all candidates would collapse to one
+            # cached response and value-guided search would see no action diversity.
+            text, _, _ = client.generate(model, prompt, temperature=0.7, max_tokens=6, seed=seed)
         except Exception:  # noqa: BLE001
             return actions[seed % len(actions)]
         m = re.search(r"\d+", text)
