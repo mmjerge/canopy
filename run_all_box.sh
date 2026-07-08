@@ -48,7 +48,11 @@ REASON=(
 )
 HEADLINE_MODEL="us.meta.llama3-1-70b-instruct-v1:0"
 
-want() { [ "$GROUP" = "all" ] || [ "$GROUP" = "$1" ]; }
+SKIP="${SKIP:-}"          # comma-separated groups to skip, e.g. SKIP=systems
+want() {                  # run group $1 unless it's in SKIP and unless GROUP selects another
+  case ",$SKIP," in *",$1,"*) return 1 ;; esac
+  [ "$GROUP" = "all" ] || [ "$GROUP" = "$1" ]
+}
 run() {  # run <name> <cmd...> : timestamped, tee'd to logs/<name>.log, never aborts the suite
   local name="$1"; shift
   echo ">>> $name  ($(date '+%H:%M:%S'))"
@@ -58,7 +62,27 @@ run() {  # run <name> <cmd...> : timestamped, tee'd to logs/<name>.log, never ab
 if ! "$PY" -c "import canopy" 2>/dev/null; then
   echo "ERROR: canopy not importable in $PY (run: $PY -m pip install -e .)"; exit 1
 fi
-echo "interpreter=$PY  workers=$WORKERS  group=$GROUP  logs=./logs/"
+echo "interpreter=$PY  workers=$WORKERS  group=$GROUP  skip=${SKIP:-none}  logs=./logs/"
+
+# --- status: inventory what results already exist (no runs, no spend) -----------------------
+if [ "$GROUP" = "status" ]; then
+  echo "=== results present in paper/figures/ (what's already done) ==="
+  "$PY" - <<'PYEOF'
+import glob, json, os
+files = sorted(glob.glob("paper/figures/*_results.json"))
+if not files:
+    print("  (none yet)")
+for f in files:
+    try:
+        d = json.load(open(f))
+        lv = d.get("levels")
+        n = len(lv) if isinstance(lv, dict) else "-"
+        print(f"  {os.path.basename(f):52s} levels={n}  n_problems={d.get('n_problems','?')}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  {os.path.basename(f)}: unreadable ({e})")
+PYEOF
+  exit 0
+fi
 
 # --- Synthetic (no AWS): deterministic tree-bandit figures + theory link ---------------------
 if want synthetic; then
