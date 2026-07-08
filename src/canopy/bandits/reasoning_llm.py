@@ -179,6 +179,18 @@ _ROLLOUT = (
     "Problem: {q}\n\nSolution so far:\n{prefix}\nFinish the solution:"
 )
 
+# The three templates (solve, continue, rollout) each strategy uses, defaulting to the math ones
+# above. A benchmark can supply its own (e.g. code) via the ``prompts`` argument.
+MATH_PROMPTS = (_SOLVE, _CONTINUE, _ROLLOUT)
+CODE_PROMPTS = (
+    "Write a complete, correct Python solution to the following problem. Respond with only the "
+    "solution as a single ```python code block.\n\nProblem:\n{q}\n",
+    "You are writing a Python solution to the problem below.\n\nProblem:\n{q}\n\nSolution so "
+    "far:\n{prefix}\nContinue with the next part of the code:",
+    "Complete the Python solution to the problem below. Respond with only the full solution as a "
+    "single ```python code block.\n\nProblem:\n{q}\n\nSolution so far:\n{prefix}\n",
+)
+
 
 # --- strategies ----------------------------------------------------------------
 
@@ -198,17 +210,29 @@ def best_of_n(
     max_tokens: int = 512,
     extract_fn: Callable[[str], str | None] = extract_answer,
     grade_fn: Callable[[str | None, str], bool] = _grade_numeric,
+    prompts: tuple = MATH_PROMPTS,
+    select_fn: Callable | None = None,
 ) -> SearchResult:
-    """Sample ``n`` full solutions and return the majority-vote answer (self-consistency)."""
+    """Sample ``n`` full solutions and select one (self-consistency by default).
+
+    ``select_fn(answers, gold) -> answer`` chooses among the extracted answers using only cheap /
+    public information; the default is a majority vote (self-consistency). Code benchmarks pass a
+    public-test selector so best-of-N and value-guided are selected on the same (public) signal
+    and only the final choice is graded on the hidden suite.
+    """
+    solve_prompt = prompts[0]
     budget = Budget()
-    votes: Counter[str] = Counter()
+    answers: list = []
     for i in range(n):
-        text = generate(_SOLVE.format(q=question), max_tokens, i)
+        text = generate(solve_prompt.format(q=question), max_tokens, i)
         budget.charge(text)
         a = extract_fn(text)
         if a is not None:
-            votes[a] += 1
-    answer = votes.most_common(1)[0][0] if votes else None
+            answers.append(a)
+    if select_fn is not None:
+        answer = select_fn(answers, gold) if answers else None
+    else:
+        answer = Counter(answers).most_common(1)[0][0] if answers else None
     return SearchResult(answer=answer, correct=grade_fn(answer, gold), budget=budget)
 
 
@@ -225,6 +249,8 @@ def value_guided_search(
     extract_fn: Callable[[str], str | None] = extract_answer,
     grade_fn: Callable[[str | None, str], bool] = _grade_numeric,
     trace_log: list | None = None,
+    prompts: tuple = MATH_PROMPTS,
+    select_fn: Callable | None = None,
 ) -> SearchResult:
     """Beam/tree search over reasoning steps with cheap-rollout value (multi-fidelity probe).
 
@@ -249,6 +275,7 @@ def value_guided_search(
     """
     if value_fn is None:
         value_fn = lambda texts: _self_consistency(texts, extract_fn)  # noqa: E731
+    _, continue_prompt, rollout_prompt = prompts
     budget = Budget()
     prefix = ""
     for step in range(n_steps):
@@ -256,13 +283,13 @@ def value_guided_search(
         step_records = []
         for c in range(branching):
             cand = generate(
-                _CONTINUE.format(q=question, prefix=prefix), max_tokens // 2, 1000 * step + c
+                continue_prompt.format(q=question, prefix=prefix), max_tokens // 2, 1000 * step + c
             )
             budget.charge(cand)
             roll_texts: list[str] = []
             for r in range(rollouts):
                 roll = generate(
-                    _ROLLOUT.format(q=question, prefix=prefix + "\n" + cand),
+                    rollout_prompt.format(q=question, prefix=prefix + "\n" + cand),
                     max_tokens,
                     50_000 + 1000 * (step * branching + c) + r,
                 )
@@ -283,14 +310,17 @@ def value_guided_search(
             step_records[best_c]["chosen"] = True
             trace_log.extend(step_records)
         prefix = prefix + "\n" + (best_step or "")
-    votes: Counter[str] = Counter()
+    answers: list = []
     for f in range(final_rollouts):
-        final = generate(_ROLLOUT.format(q=question, prefix=prefix), max_tokens, 999_000 + f)
+        final = generate(rollout_prompt.format(q=question, prefix=prefix), max_tokens, 999_000 + f)
         budget.charge(final)
         a = extract_fn(final)
         if a is not None:
-            votes[a] += 1
-    answer = votes.most_common(1)[0][0] if votes else None
+            answers.append(a)
+    if select_fn is not None:
+        answer = select_fn(answers, gold) if answers else None
+    else:
+        answer = Counter(answers).most_common(1)[0][0] if answers else None
     return SearchResult(answer=answer, correct=grade_fn(answer, gold), budget=budget)
 
 

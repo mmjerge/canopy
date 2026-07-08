@@ -23,6 +23,7 @@ GROUP="${GROUP:-all}"
 N_MATH="${N_MATH:-300}"
 N_GSM8K="${N_GSM8K:-200}"
 N_MMLU_TRIALS="${N_MMLU_TRIALS:-20}"
+N_CODE="${N_CODE:-164}"   # HumanEval has 164 tasks; MBPP test split is larger
 VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 # ALFWorld runs in its OWN env (alfworld deps conflict with the main venv). Set ALFWORLD_CONFIG
 # and point ALFWORLD_PY at that env's python; that env must have canopy reinstalled (pip install
@@ -81,6 +82,14 @@ if want reasoning; then
       --benchmark gsm8k --model "$model" "${tagflag[@]}" \
       --n-problems "$N_GSM8K" --depth-sweep 2,3,4,5 --workers "$WORKERS" --resume
   done
+  # code domain (second flagship): HumanEval + MBPP on the headline model. Grades by EXECUTING
+  # model-generated code in a sandboxed subprocess -- safe only on this disposable box.
+  run reason_humaneval_headline "$PY" examples/reasoning/reasoning_search.py \
+    --benchmark humaneval --model "$HEADLINE_MODEL" --n-problems "$N_CODE" \
+    --workers "$WORKERS" --resume
+  run reason_mbpp_headline "$PY" examples/reasoning/reasoning_search.py \
+    --benchmark mbpp --model "$HEADLINE_MODEL" --n-problems "$N_CODE" \
+    --workers "$WORKERS" --resume
   # mechanism characterization on the headline model (the "almost tree-K-Lipschitz" evidence)
   run reason_tree "$PY" examples/analysis/reasoning_tree_lipschitz.py \
     --benchmark math --model "$HEADLINE_MODEL" \

@@ -44,7 +44,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from canopy.bandits.code_eval import (
+    extract_code,
+    grade_code,
+    public_test_value,
+    select_by_public_tests,
+)
 from canopy.bandits.reasoning_llm import (
+    CODE_PROMPTS,
+    MATH_PROMPTS,
     best_of_n,
     extract_answer,
     extract_boxed_answer,
@@ -92,9 +100,79 @@ def load_math(n: int):
     return items
 
 
+def _assert_lines(test_src: str) -> list[str]:
+    """Pull top-level ``assert ...`` statements out of a test body (best-effort, single-line)."""
+    out = []
+    for line in test_src.splitlines():
+        s = line.strip()
+        if s.startswith("assert "):
+            out.append(s)
+    return out
+
+
+def load_humaneval(n: int):
+    """HumanEval: complete a function; grade by its hidden ``check`` suite. Cheap probe = 1 assert.
+
+    ``gold`` = {code_prefix (signature+docstring), entry_point, public (1 assert), hidden_suffix
+    (the check function + ``check(candidate)``)}. The prompt shown to the model is the signature
+    and docstring, which it completes.
+    """
+    from datasets import load_dataset
+
+    ds = load_dataset("openai_humaneval", split="test")
+    items = []
+    for row in ds.select(range(min(n, len(ds)))):
+        asserts = _assert_lines(row["test"])
+        gold = {
+            "code_prefix": row["prompt"],
+            "entry_point": row["entry_point"],
+            "public": asserts[:1],
+            "hidden_suffix": row["test"] + f"\ncheck({row['entry_point']})\n",
+        }
+        items.append((row["prompt"], gold))
+    return items
+
+
+def load_mbpp(n: int):
+    """MBPP: write a function passing a list of asserts. Cheap probe = first assert; hidden = all."""
+    from datasets import load_dataset
+
+    ds = load_dataset("mbpp", split="test")
+    items = []
+    for row in ds.select(range(min(n, len(ds)))):
+        tests = list(row["test_list"])
+        prompt = (
+            f"{row['text']}\n\nYour function must pass this test:\n{tests[0]}"
+            if tests else row["text"]
+        )
+        gold = {
+            "code_prefix": "",
+            "entry_point": "",
+            "public": tests[:1],
+            "hidden_suffix": "\n".join(tests),
+        }
+        items.append((prompt, gold))
+    return items
+
+
+def _code_value_factory(gold):
+    """Per-problem cheap value: fraction of rollouts whose code passes the public test(s)."""
+    return lambda rollout_texts: public_test_value(rollout_texts, gold)
+
+
+# Per-benchmark spec: how to load, extract an answer, grade the leaf, which prompts to use, and
+# (for code) a per-problem cheap-value factory + a public-test selector shared by both strategies.
 BENCHMARKS = {
-    "math": (load_math, extract_boxed_answer, grade_math),
-    "gsm8k": (load_gsm8k, extract_answer, _grade_numeric),
+    "math": dict(loader=load_math, extract=extract_boxed_answer, grade=grade_math,
+                 prompts=MATH_PROMPTS, value_factory=None, select=None, depth_sweep="2,4,6,8,10"),
+    "gsm8k": dict(loader=load_gsm8k, extract=extract_answer, grade=_grade_numeric,
+                  prompts=MATH_PROMPTS, value_factory=None, select=None, depth_sweep="2,3,4,5"),
+    "humaneval": dict(loader=load_humaneval, extract=extract_code, grade=grade_code,
+                      prompts=CODE_PROMPTS, value_factory=_code_value_factory,
+                      select=select_by_public_tests, depth_sweep="2,3,4"),
+    "mbpp": dict(loader=load_mbpp, extract=extract_code, grade=grade_code,
+                 prompts=CODE_PROMPTS, value_factory=_code_value_factory,
+                 select=select_by_public_tests, depth_sweep="2,3,4"),
 }
 
 
@@ -130,21 +208,30 @@ def load_mock_problems(n: int):
     return [(f"Mock problem number {i}: what is {i} plus {i}?", str((2 * i) % 100)) for i in range(n)]
 
 
-def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, workers=8):
+def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, workers=8,
+              prompts=MATH_PROMPTS, value_factory=None, select=None):
     """Run both strategies over all problems at one budget level; return per-problem 0/1 lists.
 
     Problems are independent, so they run on a thread pool (``workers``); the model calls are
     I/O-bound, giving a near-linear speedup. If a spend/call cap trips mid-level, the whole level
     is discarded (re-raised) so a partial, biased level is never saved -- the caller resumes it.
+
+    ``prompts`` selects the template set (math vs code); ``value_factory(gold)`` builds the
+    per-problem cheap value (code: public-test pass fraction; math: ``None`` -> self-consistency);
+    ``select`` is a shared public-only selector so best-of-N and value-guided are chosen on the
+    same signal (code), with the hidden suite used only for the final grade.
     """
     branching, n_steps, rollouts, final_rollouts = cfg
     bo_n = vg_call_budget(branching, n_steps, rollouts, final_rollouts)
 
     def _one(q, gold):
-        bo = best_of_n(q, gold, generate, n=bo_n, extract_fn=extract_fn, grade_fn=grade_fn)
+        value_fn = value_factory(gold) if value_factory is not None else None
+        bo = best_of_n(q, gold, generate, n=bo_n, extract_fn=extract_fn, grade_fn=grade_fn,
+                       prompts=prompts, select_fn=select)
         vg = value_guided_search(
             q, gold, generate, branching=branching, n_steps=n_steps, rollouts=rollouts,
             final_rollouts=final_rollouts, extract_fn=extract_fn, grade_fn=grade_fn,
+            value_fn=value_fn, prompts=prompts, select_fn=select,
         )
         return int(bo.correct), int(vg.correct), bo.budget.calls, vg.budget.calls
 
@@ -314,8 +401,9 @@ def main() -> None:
     ap.add_argument("--branching", type=int, default=3)
     ap.add_argument("--rollouts", type=int, default=2)
     ap.add_argument("--final-rollouts", type=int, default=5)
-    ap.add_argument("--depth-sweep", default="2,4,6,8",
-                    help="comma-separated n_steps values; each is one matched-budget level")
+    ap.add_argument("--depth-sweep", default="",
+                    help="comma-separated n_steps values (each is one matched-budget level); "
+                         "empty uses the benchmark's default sweep")
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="")
@@ -329,8 +417,10 @@ def main() -> None:
     ap.add_argument("--mock", action="store_true", help="deterministic mock model, no deps/creds")
     args = ap.parse_args()
 
-    depths = [int(x) for x in args.depth_sweep.split(",") if x.strip()]
-    loader, extract_fn, grade_fn = BENCHMARKS[args.benchmark]
+    spec = BENCHMARKS[args.benchmark]
+    loader, extract_fn, grade_fn = spec["loader"], spec["extract"], spec["grade"]
+    prompts, value_factory, select = spec["prompts"], spec["value_factory"], spec["select"]
+    depths = [int(x) for x in (args.depth_sweep or spec["depth_sweep"]).split(",") if x.strip()]
     cache = args.cache or f"examples/.cache/reasoning_{args.benchmark}.jsonl"
 
     if args.mock:
@@ -342,7 +432,9 @@ def main() -> None:
             pass
 
         budget_error = _NoBudgetError
-        extract_fn, grade_fn = extract_answer, _grade_numeric  # mock emits #### numbers
+        # mock emits '#### <number>'; use the numeric path regardless of benchmark
+        extract_fn, grade_fn = extract_answer, _grade_numeric
+        prompts, value_factory, select = MATH_PROMPTS, None, None
     else:
         try:
             from canopy.llm import BedrockClient, BudgetError, CachingLLMClient, as_generate_fn
@@ -385,7 +477,8 @@ def main() -> None:
             continue
         try:
             level = run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error,
-                              workers=args.workers)
+                              workers=args.workers, prompts=prompts, value_factory=value_factory,
+                              select=select)
         except budget_error as e:
             print(f"\n[budget stop] {e}  (completed {i}/{len(depths)} levels)")
             break

@@ -366,7 +366,7 @@ def main() -> None:
                 base, cache, max_calls=args.max_calls, max_spend_usd=args.max_spend
             )
             generate = as_generate_fn(client, args.model, temperature=0.7)
-            problems = RS_BENCH[args.benchmark][0](args.n_problems)
+            problems = RS_BENCH[args.benchmark]["loader"](args.n_problems)
             budget_error, model_label = BudgetError, args.model
         except Exception as e:  # noqa: BLE001
             print(f"Could not initialize the real-LLM characterization: {e}\n"
