@@ -129,7 +129,11 @@ if want reasoning; then
     --benchmark math --model "$HEADLINE_MODEL" \
     --n-problems "$N_MATH" --branching 3 --n-steps 6 --rollouts 8 --workers "$WORKERS"
   # combine the per-model runs into the capability-sweep figures
-  run combine_math  "$PY" examples/reasoning/combine_reasoning_models.py --benchmark math
+  # mistral-large-2402 does not follow the answer-format instruction on MATH (it emits prose
+  # answers), so its MATH score is extraction-confounded; exclude it from the MATH figure only.
+  # It is clean (and kept) on GSM8K (numeric) and GPQA (multiple-choice). Override with MATH_EXCLUDE.
+  run combine_math  "$PY" examples/reasoning/combine_reasoning_models.py --benchmark math \
+    --exclude "${MATH_EXCLUDE:-mistral-large}"
   run combine_gsm8k "$PY" examples/reasoning/combine_reasoning_models.py --benchmark gsm8k
   run combine_gpqad "$PY" examples/reasoning/combine_reasoning_models.py --benchmark gpqa_diamond
 fi

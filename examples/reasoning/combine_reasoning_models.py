@@ -59,8 +59,13 @@ def _paired_bootstrap(bo_hits, vg_hits, iters=4000, seed=0):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--benchmark", default="math")
+    ap.add_argument("--exclude", default="",
+                    help="comma-separated model labels to drop (e.g. models that did not follow "
+                         "the answer format on this benchmark, so their scores are "
+                         "extraction-confounded rather than a real capability measurement)")
     args = ap.parse_args()
     bench = args.benchmark
+    exclude = {s.strip() for s in args.exclude.split(",") if s.strip()}
 
     files = sorted(FIGURE_DIR.glob(f"reasoning_search_{bench}*_results.json"))
     rows = []
@@ -69,13 +74,17 @@ def main() -> None:
         levels = data.get("levels", {})
         if not levels:
             continue
+        label = _label(f, bench, data.get("model", ""))
+        if label in exclude:
+            print(f"  (excluding {label}: format non-compliance on {bench.upper()})")
+            continue
         lv = _max_budget_level(levels)
         bo_hits, vg_hits = lv["best_of_n"]["hits"], lv["value_guided"]["hits"]
         if not bo_hits:
             continue
         stats = _paired_bootstrap(bo_hits, vg_hits)
         rows.append({
-            "label": _label(f, bench, data.get("model", "")),
+            "label": label,
             "n": len(bo_hits), "budget": lv["matched_budget"],
             "bo": stats[0], "bo_lo": stats[1], "bo_hi": stats[2],
             "vg": stats[3], "vg_lo": stats[4], "vg_hi": stats[5],
