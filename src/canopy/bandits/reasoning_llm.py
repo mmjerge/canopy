@@ -126,8 +126,11 @@ def extract_boxed_answer(text: str) -> str | None:
     if boxed is not None:
         return normalize_math(boxed)
     if "####" in text:
-        tail = text.split("####")[-1].strip()
-        first = tail.splitlines()[0] if tail else ""
+        tail = text.split("####")[-1]
+        # Some models echo the literal ``<answer>`` placeholder from the prompt; drop it, then
+        # take the first NON-EMPTY line (models may put a blank line before the actual answer).
+        tail = re.sub(r"<\s*answer\s*>", " ", tail, flags=re.IGNORECASE)
+        first = next((ln.strip() for ln in tail.splitlines() if ln.strip()), "")
         return normalize_math(first) if first else None
     nums = _NUM.findall(text)
     return _normalize(nums[-1]) if nums else None
