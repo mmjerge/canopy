@@ -24,6 +24,8 @@ N_MATH="${N_MATH:-300}"
 N_GSM8K="${N_GSM8K:-200}"
 N_MMLU_TRIALS="${N_MMLU_TRIALS:-20}"
 N_CODE="${N_CODE:-164}"   # HumanEval has 164 tasks; MBPP test split is larger
+N_GPQA_D="${N_GPQA_D:-198}"   # GPQA-Diamond has 198 questions (all of them)
+N_GPQA_MAIN="${N_GPQA_MAIN:-200}"
 VLLM_MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 # ALFWorld runs in its OWN env (alfworld deps conflict with the main venv). Set ALFWORLD_CONFIG
 # and point ALFWORLD_PY at that env's python; that env must have canopy reinstalled (pip install
@@ -81,6 +83,10 @@ if want reasoning; then
     run "reason_gsm8k_${tag}" "$PY" examples/reasoning/reasoning_search.py \
       --benchmark gsm8k --model "$model" "${tagflag[@]}" \
       --n-problems "$N_GSM8K" --depth-sweep 2,3,4,5 --workers "$WORKERS" --resume
+    # GPQA-Diamond (graduate science, hard for all models -> strong reachable-but-unreliable case)
+    run "reason_gpqad_${tag}" "$PY" examples/reasoning/reasoning_search.py \
+      --benchmark gpqa_diamond --model "$model" "${tagflag[@]}" \
+      --n-problems "$N_GPQA_D" --workers "$WORKERS" --resume
   done
   # code domain (second flagship): HumanEval + MBPP on the headline model. Grades by EXECUTING
   # model-generated code in a sandboxed subprocess -- safe only on this disposable box.
@@ -90,6 +96,10 @@ if want reasoning; then
   run reason_mbpp_headline "$PY" examples/reasoning/reasoning_search.py \
     --benchmark mbpp --model "$HEADLINE_MODEL" --n-problems "$N_CODE" \
     --workers "$WORKERS" --resume
+  # GPQA main split on the headline model (broader science set beyond Diamond)
+  run reason_gpqa_headline "$PY" examples/reasoning/reasoning_search.py \
+    --benchmark gpqa --model "$HEADLINE_MODEL" --n-problems "$N_GPQA_MAIN" \
+    --workers "$WORKERS" --resume
   # mechanism characterization on the headline model (the "almost tree-K-Lipschitz" evidence)
   run reason_tree "$PY" examples/analysis/reasoning_tree_lipschitz.py \
     --benchmark math --model "$HEADLINE_MODEL" \
@@ -97,6 +107,7 @@ if want reasoning; then
   # combine the per-model runs into the capability-sweep figures
   run combine_math  "$PY" examples/reasoning/combine_reasoning_models.py --benchmark math
   run combine_gsm8k "$PY" examples/reasoning/combine_reasoning_models.py --benchmark gsm8k
+  run combine_gpqad "$PY" examples/reasoning/combine_reasoning_models.py --benchmark gpqa_diamond
 fi
 
 # --- Routing (offline RouterBench + Bedrock MMLU + tau-bench) --------------------------------

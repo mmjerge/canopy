@@ -160,6 +160,64 @@ def _code_value_factory(gold):
     return lambda rollout_texts: public_test_value(rollout_texts, gold)
 
 
+# --- GPQA (graduate-level multiple-choice science): a third domain --------------------------
+import re as _re  # noqa: E402
+
+_CHOICE_RE = _re.compile(r"\b([A-D])\b")
+
+
+def parse_choice(text: str) -> str | None:
+    """Extract the chosen letter A-D: prefer text after '####', else the last isolated letter."""
+    if not text:
+        return None
+    src = text.split("####")[-1] if "####" in text else text
+    hits = _CHOICE_RE.findall(src.upper())
+    return hits[-1] if hits else None
+
+
+def _grade_choice(answer: str | None, gold: str) -> bool:
+    return answer is not None and answer == gold
+
+
+def _load_gpqa(n: int, config: str):
+    """Load GPQA (gated: needs an HF token + accepting the dataset license).
+
+    Each question has one correct + three incorrect answers; we shuffle them deterministically
+    (seeded by index) into labelled options A-D and record the correct letter as gold. The model
+    reasons step by step and ends with '#### <letter>'. Multi-step, discrete answer -> the same
+    self-consistency cheap probe as MATH/GSM8K.
+    """
+    import random
+
+    from datasets import load_dataset
+
+    ds = load_dataset("Idavidrein/gpqa", config, split="train")
+    letters = "ABCD"
+    items = []
+    for i, row in enumerate(ds.select(range(min(n, len(ds))))):
+        opts = [
+            row["Correct Answer"].strip(),
+            row["Incorrect Answer 1"].strip(),
+            row["Incorrect Answer 2"].strip(),
+            row["Incorrect Answer 3"].strip(),
+        ]
+        order = list(range(4))
+        random.Random(i).shuffle(order)
+        shuffled = [opts[j] for j in order]
+        gold = letters[order.index(0)]  # where the correct answer (index 0) landed
+        body = "\n".join(f"{letters[k]}) {shuffled[k]}" for k in range(4))
+        items.append((f"{row['Question'].strip()}\n{body}", gold))
+    return items
+
+
+def load_gpqa_main(n: int):
+    return _load_gpqa(n, "gpqa_main")
+
+
+def load_gpqa_diamond(n: int):
+    return _load_gpqa(n, "gpqa_diamond")
+
+
 # Per-benchmark spec: how to load, extract an answer, grade the leaf, which prompts to use, and
 # (for code) a per-problem cheap-value factory + a public-test selector shared by both strategies.
 BENCHMARKS = {
@@ -173,6 +231,11 @@ BENCHMARKS = {
     "mbpp": dict(loader=load_mbpp, extract=extract_code, grade=grade_code,
                  prompts=CODE_PROMPTS, value_factory=_code_value_factory,
                  select=select_by_public_tests, depth_sweep="2,3,4"),
+    "gpqa": dict(loader=load_gpqa_main, extract=parse_choice, grade=_grade_choice,
+                 prompts=MATH_PROMPTS, value_factory=None, select=None, depth_sweep="2,4,6,8"),
+    "gpqa_diamond": dict(loader=load_gpqa_diamond, extract=parse_choice, grade=_grade_choice,
+                         prompts=MATH_PROMPTS, value_factory=None, select=None,
+                         depth_sweep="2,4,6,8"),
 }
 
 
