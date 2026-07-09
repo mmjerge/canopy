@@ -119,7 +119,8 @@ def load_humaneval(n: int):
     """
     from datasets import load_dataset
 
-    ds = load_dataset("openai_humaneval", split="test")
+    # newer datasets versions require the namespaced repo id (bare "openai_humaneval" fails)
+    ds = load_dataset("openai/openai_humaneval", split="test")
     items = []
     for row in ds.select(range(min(n, len(ds)))):
         asserts = _assert_lines(row["test"])
