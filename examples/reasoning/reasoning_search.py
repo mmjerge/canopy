@@ -137,7 +137,8 @@ def load_mbpp(n: int):
     """MBPP: write a function passing a list of asserts. Cheap probe = first assert; hidden = all."""
     from datasets import load_dataset
 
-    ds = load_dataset("mbpp", split="test")
+    # newer datasets versions require the namespaced repo id (bare "mbpp" no longer resolves)
+    ds = load_dataset("google-research-datasets/mbpp", "full", split="test")
     items = []
     for row in ds.select(range(min(n, len(ds)))):
         tests = list(row["test_list"])
