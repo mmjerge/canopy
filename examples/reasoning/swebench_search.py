@@ -42,10 +42,13 @@ from pathlib import Path
 
 from canopy.bandits.swebench_eval import (
     SWEBENCH_PROMPTS,
+    build_patch,
     cheap_value,
-    extract_patch,
     failing_f2p_feedback,
+    fetch_oracle_files,
+    format_files,
     is_resolved,
+    patched_paths,
 )
 
 try:
@@ -68,6 +71,8 @@ def load_swebench(n: int, dataset_name: str) -> list[dict]:
             "instance_id": row["instance_id"],
             "repo": row["repo"],
             "problem_statement": row["problem_statement"],
+            "base_commit": row["base_commit"],
+            "patch": row["patch"],  # gold patch: used ONLY to localize oracle files (not shown)
         })
     return items
 
@@ -89,12 +94,14 @@ def _best_index(outcomes: list[dict]) -> int:
 
 def best_of_n_swe(instance, generate, grader, n, max_tokens, run_id):
     """Sample ``n`` patches from the issue, select by cheap probe, grade the selection (leaf)."""
-    prompt = SWEBENCH_PROMPTS[0].format(repo=instance["repo"], q=instance["problem_statement"])
+    files = instance.get("_files", {})
+    prompt = SWEBENCH_PROMPTS[0].format(repo=instance["repo"], q=instance["problem_statement"],
+                                        files=format_files(files))
     patches, calls = [], 0
     for i in range(n):
         text = generate(prompt, max_tokens, i)
         calls += 1
-        patches.append(extract_patch(text))
+        patches.append(build_patch(text, files))
     outcomes = grader(instance, patches, tag="bo")
     sel = _best_index(outcomes)
     return {"resolved": int(is_resolved(outcomes[sel])), "calls": calls}
@@ -102,14 +109,17 @@ def best_of_n_swe(instance, generate, grader, n, max_tokens, run_id):
 
 def value_guided_swe(instance, generate, grader, branching, depth, max_tokens, run_id):
     """Sample B patches, keep best by cheap probe, then D feedback-conditioned refine rounds."""
-    solve = SWEBENCH_PROMPTS[0].format(repo=instance["repo"], q=instance["problem_statement"])
+    files = instance.get("_files", {})
+    files_str = format_files(files)
+    solve = SWEBENCH_PROMPTS[0].format(repo=instance["repo"], q=instance["problem_statement"],
+                                       files=files_str)
     calls = 0
     # round 0: B fresh candidate patches
     patches = []
     for c in range(branching):
         text = generate(solve, max_tokens, c)
         calls += 1
-        patches.append(extract_patch(text))
+        patches.append(build_patch(text, files))
     outcomes = grader(instance, patches, tag="vg0")
     bi = _best_index(outcomes)
     best_patch, best_outcome = patches[bi], outcomes[bi]
@@ -118,14 +128,14 @@ def value_guided_swe(instance, generate, grader, branching, depth, max_tokens, r
     for step in range(1, depth + 1):
         feedback = failing_f2p_feedback(best_outcome)
         refine = SWEBENCH_PROMPTS[1].format(
-            repo=instance["repo"], q=instance["problem_statement"],
+            repo=instance["repo"], q=instance["problem_statement"], files=files_str,
             prefix=best_patch or "(empty patch)", feedback=feedback,
         )
         cand_patches = []
         for c in range(branching):
             text = generate(refine, max_tokens, 1000 * step + c)
             calls += 1
-            cand_patches.append(extract_patch(text))
+            cand_patches.append(build_patch(text, files))
         cand_outcomes = grader(instance, cand_patches, tag=f"vg{step}")
         # keep the best of {current best} U {new candidates} by cheap value (monotone descent)
         pool = [best_patch] + cand_patches
@@ -142,6 +152,11 @@ def run_level(instances, generate, grader, branching, depth, max_tokens, run_id)
     bo_hits, vg_hits = [], []
     bar = tqdm(total=len(instances), unit="inst", desc=f"budget {n}") if tqdm else None
     for inst in instances:
+        # oracle context: fetch the current contents of the files the gold patch touches (real
+        # instances only; mock instances carry no base_commit and fall back to raw-diff parsing)
+        if inst.get("base_commit") and "_files" not in inst:
+            inst["_files"] = fetch_oracle_files(
+                inst["repo"], inst["base_commit"], patched_paths(inst.get("patch", "")))
         try:
             bo = best_of_n_swe(inst, generate, grader, n, max_tokens, run_id)
             vg = value_guided_swe(inst, generate, grader, branching, depth, max_tokens, run_id)

@@ -68,22 +68,126 @@ def extract_patch(text: str) -> str:
 # unified diff out. The three-template convention (solve, continue/refine, rollout) matches
 # reasoning_llm.MATH_PROMPTS / CODE_PROMPTS so the same search code drives them.
 
+_EDIT_INSTRUCTIONS = (
+    "Propose the fix as one or more SEARCH/REPLACE edit blocks. For each edit, copy the EXACT "
+    "current lines to change between `<<<<<<< SEARCH` and `=======`, and the new lines between "
+    "`=======` and `>>>>>>> REPLACE`. The SEARCH text must match the file byte-for-byte "
+    "(indentation included). Use this format, one block per edit:\n"
+    "### <file path>\n<<<<<<< SEARCH\n<exact current lines>\n=======\n<replacement lines>\n"
+    ">>>>>>> REPLACE\n\nOutput ONLY edit blocks, no prose."
+)
 _SWE_SOLVE = (
-    "You are fixing a bug in the `{repo}` repository. Resolve the following issue by producing a "
-    "single unified-diff patch (git diff format) against the current code.\n\n"
-    "## Issue\n{q}\n\n"
-    "Respond with ONLY the patch inside a ```diff code block. The patch must apply cleanly with "
-    "`git apply` and include correct file paths (a/ and b/ prefixes).\n"
+    "You are fixing a bug in the `{repo}` repository.\n\n## Issue\n{q}\n\n"
+    "## Relevant files (current contents)\n{files}\n\n" + _EDIT_INSTRUCTIONS
 )
 _SWE_REFINE = (
-    "You are fixing a bug in the `{repo}` repository. Your previous patch did not fully resolve "
-    "the issue.\n\n## Issue\n{q}\n\n## Your current patch\n{prefix}\n\n## Test feedback\n{feedback}\n\n"
-    "Produce an improved unified-diff patch that fixes the failing tests without breaking others. "
-    "Respond with ONLY the patch inside a ```diff code block.\n"
+    "You are fixing a bug in the `{repo}` repository. Your previous attempt did not fully resolve "
+    "the issue.\n\n## Issue\n{q}\n\n## Relevant files (current contents)\n{files}\n\n"
+    "## Your current patch\n{prefix}\n\n## Test feedback\n{feedback}\n\n"
+    "Produce improved edits that make the failing tests pass without breaking others. "
+    + _EDIT_INSTRUCTIONS
 )
-_SWE_ROLLOUT = _SWE_SOLVE  # repo patches are not "continued"; a rollout is a fresh full patch
+_SWE_ROLLOUT = _SWE_SOLVE  # a rollout is a fresh full attempt (patches are not "continued")
 
 SWEBENCH_PROMPTS = (_SWE_SOLVE, _SWE_REFINE, _SWE_ROLLOUT)
+
+
+# --- oracle file context + search/replace -> unified diff -----------------------------------
+
+_PLUS_FILE = re.compile(r"^\+\+\+ b/(\S+)", re.MULTILINE)
+_GIT_FILE = re.compile(r"^diff --git a/\S+ b/(\S+)", re.MULTILINE)
+_EDIT_BLOCK = re.compile(
+    r"###\s*(?P<path>[^\n]+?)\s*\n+<<<<<<<[ ]*SEARCH\s*\n(?P<search>.*?)\n?=======\s*\n"
+    r"(?P<replace>.*?)\n?>>>>>>>[ ]*REPLACE",
+    re.DOTALL,
+)
+
+
+def patched_paths(gold_patch: str) -> list[str]:
+    """The file paths a (gold) patch modifies -- used for oracle file localization."""
+    paths = _PLUS_FILE.findall(gold_patch or "")
+    if not paths:
+        paths = _GIT_FILE.findall(gold_patch or "")
+    # de-dup, preserve order, drop /dev/null (pure deletions)
+    seen, out = set(), []
+    for p in paths:
+        if p != "dev/null" and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def fetch_oracle_files(repo: str, base_commit: str, paths: list[str], timeout: float = 20.0) -> dict:
+    """Fetch exact base-commit contents of ``paths`` from GitHub raw (all SWE-bench repos are public).
+
+    Returns ``{path: content}`` for files that fetched successfully (HTTP 200). This is the oracle
+    setting: we localize to the files the gold patch edits and give the model their current text,
+    isolating the search question from retrieval quality.
+    """
+    import urllib.request
+
+    files: dict[str, str] = {}
+    for path in paths:
+        url = f"https://raw.githubusercontent.com/{repo}/{base_commit}/{path}"
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp:
+                if resp.status == 200:
+                    files[path] = resp.read().decode("utf-8", errors="replace")
+        except Exception:  # noqa: BLE001 -- a missing/renamed file just isn't offered as context
+            continue
+    return files
+
+
+def format_files(files: dict, max_chars_per_file: int = 24000) -> str:
+    """Render ``{path: content}`` as labelled code blocks for the prompt (large files truncated)."""
+    parts = []
+    for path, content in files.items():
+        body = content if len(content) <= max_chars_per_file else (
+            content[:max_chars_per_file] + "\n# ... (file truncated) ...\n"
+        )
+        parts.append(f"### {path}\n```python\n{body}\n```")
+    return "\n\n".join(parts) if parts else "(no files retrieved)"
+
+
+def parse_edits(text: str) -> list[tuple[str, str, str]]:
+    """Parse SEARCH/REPLACE blocks into ``[(path, search, replace), ...]`` in document order."""
+    out = []
+    for m in _EDIT_BLOCK.finditer(text or ""):
+        out.append((m.group("path").strip(), m.group("search"), m.group("replace")))
+    return out
+
+
+def _unified_diff(path: str, before: str, after: str) -> str:
+    import difflib
+
+    diff = difflib.unified_diff(
+        before.splitlines(keepends=True), after.splitlines(keepends=True),
+        fromfile=f"a/{path}", tofile=f"b/{path}",
+    )
+    return "".join(diff)
+
+
+def build_patch(text: str, files: dict | None) -> str:
+    """Turn a model completion into a unified-diff patch.
+
+    If ``files`` (oracle contents) are available and the completion has SEARCH/REPLACE blocks, apply
+    each edit to the exact file text and emit a mechanically-correct unified diff (high apply rate).
+    Otherwise fall back to :func:`extract_patch` (raw-diff completions / the mock path).
+    """
+    edits = parse_edits(text)
+    if not files or not edits:
+        return extract_patch(text)
+    after = dict(files)
+    changed = []
+    for path, search, replace in edits:
+        if path not in after or search == "" or search not in after[path]:
+            continue  # SEARCH must match the real file exactly; otherwise skip this edit
+        after[path] = after[path].replace(search, replace, 1)
+        if path not in changed:
+            changed.append(path)
+    pieces = [_unified_diff(p, files[p], after[p]) for p in changed if after[p] != files[p]]
+    patch = "".join(pieces)
+    return patch if patch.endswith("\n") or not patch else patch + "\n"
 
 
 # --- official-harness grading ---------------------------------------------------------------
@@ -224,7 +328,9 @@ def grade_candidates(
     graded in a single ``run_evaluation`` invocation, then their reports are parsed back.
     """
     iid = instance["instance_id"]
-    work = Path(work_dir)
+    # Absolute so the path is unambiguous regardless of the harness subprocess cwd (which we set
+    # to ``work`` so its ``logs/`` land there); a relative path would be resolved against cwd twice.
+    work = Path(work_dir).resolve()
     work.mkdir(parents=True, exist_ok=True)
     preds, index = [], {}
     for k, patch in enumerate(patches):
