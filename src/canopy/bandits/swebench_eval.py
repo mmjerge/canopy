@@ -72,9 +72,12 @@ _EDIT_INSTRUCTIONS = (
     "Propose the fix as one or more SEARCH/REPLACE edit blocks. For each edit, copy the EXACT "
     "current lines to change between `<<<<<<< SEARCH` and `=======`, and the new lines between "
     "`=======` and `>>>>>>> REPLACE`. The SEARCH text must match the file byte-for-byte "
-    "(indentation included). Use this format, one block per edit:\n"
-    "### <file path>\n<<<<<<< SEARCH\n<exact current lines>\n=======\n<replacement lines>\n"
-    ">>>>>>> REPLACE\n\nOutput ONLY edit blocks, no prose."
+    "(indentation included), and include a few surrounding lines so it is unique. Use this format, "
+    "one block per edit:\n"
+    "### path/to/file.py\n<<<<<<< SEARCH\n<exact current lines, copied verbatim>\n=======\n"
+    "<replacement lines>\n>>>>>>> REPLACE\n\n"
+    "A standard unified diff (```diff block) is also acceptable if you include enough context "
+    "lines. Output only the edits, no explanation."
 )
 _SWE_SOLVE = (
     "You are fixing a bug in the `{repo}` repository.\n\n## Issue\n{q}\n\n"
@@ -167,27 +170,98 @@ def _unified_diff(path: str, before: str, after: str) -> str:
     return "".join(diff)
 
 
-def build_patch(text: str, files: dict | None) -> str:
-    """Turn a model completion into a unified-diff patch.
+def diff_to_edits(text: str) -> list[tuple[str, str, str]]:
+    """Convert a model-authored unified diff into content-anchored ``(path, old, new)`` edits.
 
-    If ``files`` (oracle contents) are available and the completion has SEARCH/REPLACE blocks, apply
-    each edit to the exact file text and emit a mechanically-correct unified diff (high apply rate).
-    Otherwise fall back to :func:`extract_patch` (raw-diff completions / the mock path).
+    Models (esp. instruct models) tend to emit a ```diff block regardless of instructions, and
+    their hunk line numbers are usually wrong -- which is why ``git apply`` fails. We ignore the
+    (unreliable) ``@@`` line numbers and instead reconstruct, per hunk, the old text (context +
+    removed lines) and new text (context + added lines); re-anchoring that old text against the
+    real file (below) produces a correct diff. Robust to the model's natural output.
     """
-    edits = parse_edits(text)
-    if not files or not edits:
-        return extract_patch(text)
+    m = _PATCH_TAG.search(text or "")
+    body = m.group(1) if m else None
+    if body is None:
+        blocks = _DIFF_FENCE.findall(text or "")
+        body = blocks[-1] if blocks else None
+    if body is None:
+        ms = _DIFF_START.search(text or "")
+        body = text[ms.start():] if ms else ""
+
+    edits: list[tuple[str, str, str]] = []
+    path, old, new, in_hunk = None, [], [], False
+
+    def flush():
+        nonlocal old, new
+        if path and (old or new):
+            edits.append((path, "\n".join(old), "\n".join(new)))
+        old, new = [], []
+
+    for line in body.splitlines():
+        if line.startswith("+++ "):
+            flush()
+            p = line[4:].strip()
+            path = p[2:] if p.startswith(("a/", "b/")) else p
+            in_hunk = False
+        elif line.startswith("--- ") or line.startswith("diff --git"):
+            flush()
+            in_hunk = False
+        elif line.startswith("@@"):
+            flush()
+            in_hunk = True
+        elif in_hunk and line[:1] in (" ", "-", "+"):
+            c, content = line[0], line[1:]
+            if c in (" ", "-"):
+                old.append(content)
+            if c in (" ", "+"):
+                new.append(content)
+    flush()
+    return [(p, o, n) for (p, o, n) in edits if o != n]
+
+
+def _resolve_path(path: str, files: dict) -> str | None:
+    """Map an edit's file path to a key in ``files`` (exact, then a/ b/-stripped, then suffix)."""
+    if path in files:
+        return path
+    stripped = path[2:] if path.startswith(("a/", "b/")) else path
+    if stripped in files:
+        return stripped
+    cand = [k for k in files if k.endswith(stripped) or stripped.endswith(k)]
+    return cand[0] if len(cand) == 1 else None
+
+
+def _apply_edits(files: dict, edits: list[tuple[str, str, str]]) -> tuple[dict, list[str]]:
+    """Apply content-anchored edits to the real file text (first exact match each); returns
+    (updated_files, changed_paths). Edits whose ``old`` text is not found exactly are skipped."""
     after = dict(files)
-    changed = []
-    for path, search, replace in edits:
-        if path not in after or search == "" or search not in after[path]:
-            continue  # SEARCH must match the real file exactly; otherwise skip this edit
-        after[path] = after[path].replace(search, replace, 1)
-        if path not in changed:
-            changed.append(path)
+    changed: list[str] = []
+    for path, old, new in edits:
+        key = _resolve_path(path, after)
+        if key is None or not old or old not in after[key]:
+            continue
+        after[key] = after[key].replace(old, new, 1)
+        if key not in changed:
+            changed.append(key)
+    return after, changed
+
+
+def build_patch(text: str, files: dict | None) -> str:
+    """Turn a model completion into a mechanically-correct unified-diff patch.
+
+    Accepts either SEARCH/REPLACE blocks (preferred) or a model-authored ```diff (re-anchored by
+    content), applies the edits to the exact oracle file text, and regenerates a clean unified diff
+    via ``difflib`` -- sidestepping the wrong-line-number problem that makes raw model diffs fail to
+    apply. Falls back to :func:`extract_patch` when no oracle files are available (the mock path).
+    """
+    if not files:
+        return extract_patch(text)
+    edits = parse_edits(text) or diff_to_edits(text)
+    if not edits:
+        return extract_patch(text)
+    after, changed = _apply_edits(files, edits)
     pieces = [_unified_diff(p, files[p], after[p]) for p in changed if after[p] != files[p]]
     patch = "".join(pieces)
-    return patch if patch.endswith("\n") or not patch else patch + "\n"
+    return patch if (not patch or patch.endswith("\n")) else patch + "\n"
 
 
 # --- official-harness grading ---------------------------------------------------------------
