@@ -60,13 +60,35 @@ FIGDIR = Path(__file__).resolve().parents[2] / "paper" / "figures"
 MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
-def load_swebench(n: int, dataset_name: str) -> list[dict]:
-    """Load the first ``n`` SWE-bench instances as plain dicts (issue text + test metadata)."""
+def load_swebench(n: int, dataset_name: str, difficulty: str = "", repo: str = "") -> list[dict]:
+    """Load ``n`` SWE-bench instances (issue + test metadata), optionally filtered and repo-balanced.
+
+    Taking the first ``n`` rows biases to one repo (they are sorted by instance id, so SWE-bench
+    Verified starts with all-astropy, one of the hardest repos). Instead we optionally filter by
+    ``difficulty`` (e.g. "<15 min fix") and/or ``repo``, then round-robin across repos so a small
+    pilot is difficulty-controlled and repo-diverse rather than an unsolvable corner.
+    """
+    from collections import OrderedDict
+
     from datasets import load_dataset
 
     ds = load_dataset(dataset_name, split="test")
+    rows = list(ds)
+    has_diff = "difficulty" in (ds.features or {})
+    if difficulty and has_diff:
+        rows = [r for r in rows if r.get("difficulty") == difficulty]
+    if repo:
+        rows = [r for r in rows if r.get("repo") == repo]
+    by_repo: "OrderedDict[str, list]" = OrderedDict()
+    for r in rows:
+        by_repo.setdefault(r["repo"], []).append(r)
+    ordered = []
+    while any(by_repo.values()) and len(ordered) < len(rows):
+        for lst in by_repo.values():
+            if lst:
+                ordered.append(lst.pop(0))
     items = []
-    for row in ds.select(range(min(n, len(ds)))):
+    for row in ordered[:n]:
         items.append({
             "instance_id": row["instance_id"],
             "repo": row["repo"],
@@ -257,6 +279,9 @@ def load_mock_instances(n: int):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="princeton-nlp/SWE-bench_Verified")
+    ap.add_argument("--difficulty", default="",
+                    help="filter by SWE-bench difficulty tier, e.g. '<15 min fix' (Verified only)")
+    ap.add_argument("--repo", default="", help="restrict to one repo, e.g. django/django")
     ap.add_argument("--n-instances", type=int, default=20)
     ap.add_argument("--model", default=MODEL_ID)
     ap.add_argument("--region", default="us-east-1")
@@ -294,7 +319,8 @@ def main() -> None:
             base = BedrockClient(region=args.region, max_tokens=args.max_tokens)
             client = CachingLLMClient(base, args.cache)
             generate = as_generate_fn(client, args.model, temperature=0.7)
-            instances = load_swebench(args.n_instances, args.dataset)
+            instances = load_swebench(args.n_instances, args.dataset,
+                                       difficulty=args.difficulty, repo=args.repo)
 
             def grader(instance, patches, tag="c"):
                 return grade_candidates(
