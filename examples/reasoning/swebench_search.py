@@ -168,13 +168,23 @@ def value_guided_swe(instance, generate, grader, branching, depth, max_tokens, r
     return {"resolved": int(is_resolved(best_outcome)), "calls": calls}
 
 
-def run_level(instances, generate, grader, branching, depth, max_tokens, run_id):
-    """Run both strategies over all instances at the (single) matched budget; return 0/1 lists."""
+def run_level(instances, generate, grader, branching, depth, max_tokens, run_id,
+              per_instance, checkpoint):
+    """Run both strategies over all instances at the matched budget, checkpointing per instance.
+
+    ``per_instance`` maps ``instance_id -> {"bo": 0/1, "vg": 0/1}`` and is updated in place;
+    already-present instances are skipped (resume). ``checkpoint(per_instance)`` is called after
+    every completed instance so a multi-hour run loses at most one instance on a crash.
+    """
     n = matched_budget(branching, depth)
-    bo_hits, vg_hits = [], []
     bar = tqdm(total=len(instances), unit="inst", desc=f"budget {n}") if tqdm else None
     for inst in instances:
-        # oracle context: fetch the current contents of the files the gold patch touches (real
+        iid = inst["instance_id"]
+        if iid in per_instance:  # resume: already graded in a previous run
+            if bar is not None:
+                bar.update(1)
+            continue
+        # oracle context: fetch current contents of the files the gold patch touches (real
         # instances only; mock instances carry no base_commit and fall back to raw-diff parsing)
         if inst.get("base_commit") and "_files" not in inst:
             inst["_files"] = fetch_oracle_files(
@@ -183,18 +193,24 @@ def run_level(instances, generate, grader, branching, depth, max_tokens, run_id)
             bo = best_of_n_swe(inst, generate, grader, n, max_tokens, run_id)
             vg = value_guided_swe(inst, generate, grader, branching, depth, max_tokens, run_id)
         except Exception as e:  # noqa: BLE001 -- skip an instance whose harness/grader errored
-            print(f"  [skip {inst['instance_id']}] {type(e).__name__}: {str(e)[:120]}")
+            print(f"  [skip {iid}] {type(e).__name__}: {str(e)[:120]}")
             if bar is not None:
                 bar.update(1)
             continue
-        bo_hits.append(bo["resolved"])
-        vg_hits.append(vg["resolved"])
+        per_instance[iid] = {"bo": bo["resolved"], "vg": vg["resolved"]}
+        checkpoint(per_instance)
         if bar is not None:
             bar.update(1)
     if bar is not None:
         bar.close()
-    return {"matched_budget": n, "n_instances": len(bo_hits),
-            "best_of_n": {"hits": bo_hits}, "value_guided": {"hits": vg_hits}}
+    return n
+
+
+def _hits(per_instance):
+    """Per-instance 0/1 lists (best-of-N, value-guided) from the checkpoint map, in insertion order."""
+    bo = [v["bo"] for v in per_instance.values()]
+    vg = [v["vg"] for v in per_instance.values()]
+    return bo, vg
 
 
 def _bootstrap_ci(hits, iters=2000, seed=0):
@@ -220,21 +236,31 @@ def _paired_delta_ci(bo_hits, vg_hits, iters=4000, seed=0):
     return float((vg - bo).mean()), float(np.percentile(d, 2.5)), float(np.percentile(d, 97.5))
 
 
-def _write_outputs(result, model, dataset_name, n_instances, tag="swebench"):
-    """Write results JSON + LaTeX table (+ figure) for the single matched-budget SWE-bench level."""
-    if not result or result["n_instances"] == 0:
-        return
+def _stem(tag):
+    return f"reasoning_search_{tag}"
+
+
+def write_checkpoint(per_instance, budget, model, dataset_name, tag):
+    """Persist the per-instance checkpoint (results JSON only) so a crash resumes where it left off."""
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    stem = f"reasoning_search_{tag}"
-    (FIGDIR / f"{stem}_results.json").write_text(
+    (FIGDIR / f"{_stem(tag)}_results.json").write_text(
         json.dumps({"benchmark": tag, "dataset": dataset_name, "model": model,
-                    "n_instances": n_instances, "level": result}, indent=2)
+                    "n_instances": len(per_instance),
+                    "level": {"matched_budget": budget, "per_instance": per_instance}}, indent=2)
     )
-    b = result["matched_budget"]
-    bo_m, bo_lo, bo_hi = _bootstrap_ci(result["best_of_n"]["hits"], seed=b)
-    vg_m, vg_lo, vg_hi = _bootstrap_ci(result["value_guided"]["hits"], seed=b + 1)
-    d_m, d_lo, d_hi = _paired_delta_ci(result["best_of_n"]["hits"],
-                                       result["value_guided"]["hits"], seed=b)
+
+
+def _write_outputs(per_instance, budget, model, dataset_name, tag="swebench"):
+    """Write results JSON + LaTeX table for the single matched-budget SWE-bench level."""
+    if not per_instance:
+        return
+    write_checkpoint(per_instance, budget, model, dataset_name, tag)
+    stem = _stem(tag)
+    b = budget
+    bo_hits, vg_hits = _hits(per_instance)
+    bo_m, bo_lo, bo_hi = _bootstrap_ci(bo_hits, seed=b)
+    vg_m, vg_lo, vg_hi = _bootstrap_ci(vg_hits, seed=b + 1)
+    d_m, d_lo, d_hi = _paired_delta_ci(bo_hits, vg_hits, seed=b)
     tex = (
         "% SWE-bench value-guided vs best-of-N (auto-generated by swebench_search.py). Resolved "
         "rate; Delta is the paired (same-instance) gap with a 95% bootstrap CI over instances.\n"
@@ -246,7 +272,7 @@ def _write_outputs(result, model, dataset_name, n_instances, tag="swebench"):
         "\\bottomrule\n\\end{tabular}\n"
     )
     (FIGDIR / f"{stem}_table.tex").write_text(tex)
-    print(f"\nSWE-bench ({dataset_name}, {result['n_instances']} instances), model {model}")
+    print(f"\nSWE-bench ({dataset_name}, {len(per_instance)} instances), model {model}")
     print(f"  budget {b}: best-of-N resolved={bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}]  "
           f"value-guided resolved={vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}]  "
           f"delta={d_m:+.3f} [{d_lo:+.2f},{d_hi:+.2f}]")
@@ -337,17 +363,24 @@ def main() -> None:
                   "Smoke-test with no deps: --mock")
             return
 
-    stem = f"reasoning_search_{args.tag}"
+    budget = matched_budget(args.branching, args.depth)
+    stem = _stem(args.tag)
+    per_instance: dict = {}
     if args.resume and (FIGDIR / f"{stem}_results.json").exists():
-        print(f"resume: {stem}_results.json already exists; nothing to do (delete it to rerun)")
-        return
+        prior = json.loads((FIGDIR / f"{stem}_results.json").read_text())
+        per_instance = prior.get("level", {}).get("per_instance", {}) or {}
+        if per_instance:
+            print(f"resume: {len(per_instance)} instances already graded; continuing")
+
+    def checkpoint(pi):
+        write_checkpoint(pi, budget, model_label, args.dataset, args.tag)
 
     print(f"SWE-bench search: {len(instances)} instances, dataset {args.dataset}, "
-          f"model {model_label}, budget B*(D+1)={matched_budget(args.branching, args.depth)}")
+          f"model {model_label}, budget B*(D+1)={budget}")
     start = time.monotonic()
-    result = run_level(instances, generate, grader, args.branching, args.depth,
-                       args.max_tokens, args.run_id)
-    _write_outputs(result, model_label, args.dataset, len(instances), tag=args.tag)
+    run_level(instances, generate, grader, args.branching, args.depth,
+              args.max_tokens, args.run_id, per_instance, checkpoint)
+    _write_outputs(per_instance, budget, model_label, args.dataset, tag=args.tag)
     print(f"  ({(time.monotonic() - start) / 60:.1f}m elapsed)")
 
 
