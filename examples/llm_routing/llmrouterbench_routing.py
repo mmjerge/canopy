@@ -47,34 +47,38 @@ def load_llmrouterbench(variants=ARENA_VARIANTS):
     from huggingface_hub import hf_hub_download
 
     tp = hf_hub_download("NPULH/LLMRouterBench", "bench-release.tar.gz", repo_type="dataset")
-    t = tarfile.open(tp)
-    names = t.getnames()
+    variant_set = set(variants)
 
-    def models_of(d):
-        return sorted({n.split("/")[2] for n in names
-                       if n.startswith(f"bench-release/{d}/") and n.count("/") >= 3 and n.split("/")[2]})
+    # Single sequential pass over the (gzip) tar: gzip is not seekable, so repeated random-access
+    # extractfile() re-decompresses the whole archive each call. Read every relevant json once.
+    # data[variant][model] = {index: (score, cost)}
+    data: dict = {v: {} for v in variants}
+    with tarfile.open(tp, "r:gz") as t:
+        for member in t:
+            if not (member.isfile() and member.name.endswith(".json")):
+                continue
+            parts = member.name.split("/")  # bench-release/<variant>/<model>/<file>.json
+            if len(parts) < 4 or parts[1] not in variant_set:
+                continue
+            v, m = parts[1], parts[2]
+            try:
+                obj = json.load(t.extractfile(member))
+            except Exception:  # noqa: BLE001
+                continue
+            rec = {r["index"]: (float(r.get("score", 0.0)), float(r.get("cost", 0.0)))
+                   for r in obj.get("records", [])}
+            if rec:
+                data[v][m] = rec
 
     common = None
     for v in variants:
-        m = set(models_of(v))
+        m = set(data[v])
         common = m if common is None else (common & m)
-    models = sorted(common)
+    models = sorted(common or [])
 
     def load_variant(d):
-        # per model: {index: (score, cost)}; align across models on the shared index set
-        per_model = {}
-        for m in models:
-            files = [n for n in names if n.startswith(f"bench-release/{d}/{m}/") and n.endswith(".json")]
-            if not files:
-                per_model[m] = {}
-                continue
-            obj = json.load(t.extractfile(files[0]))
-            rec = {}
-            for r in obj.get("records", []):
-                rec[r["index"]] = (float(r.get("score", 0.0)), float(r.get("cost", 0.0)))
-            per_model[m] = rec
-        idx = set.intersection(*[set(per_model[m]) for m in models]) if models else set()
-        idx = sorted(idx)
+        per_model = {m: data[d].get(m, {}) for m in models}
+        idx = sorted(set.intersection(*[set(per_model[m]) for m in models])) if models else []
         q = np.array([[per_model[m][i][0] for m in models] for i in idx], dtype=float)
         c = np.array([[per_model[m][i][1] for m in models] for i in idx], dtype=float)
         return q, c
