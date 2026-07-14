@@ -76,18 +76,31 @@ def build_prompt(context: str, question: str, frac: float) -> str:
 
 
 def load_longbench(tasks: list[str], n_per: int):
-    """Return items [(context, question, gold_answers, task_idx)] and the task names (regions)."""
-    from datasets import load_dataset
+    """Return items [(context, question, gold_answers, task_idx)] and the task names (regions).
 
+    THUDM/LongBench ships a loader *script* (unsupported by newer ``datasets``), so we read the
+    per-task JSONL directly out of the dataset's ``data.zip`` instead.
+    """
+    import zipfile
+
+    from huggingface_hub import hf_hub_download
+
+    zp = hf_hub_download("THUDM/LongBench", "data.zip", repo_type="dataset")
+    z = zipfile.ZipFile(zp)
     items = []
     for ti, task in enumerate(tasks):
-        try:
-            ds = load_dataset("THUDM/LongBench", task, split="test")
-        except Exception:  # noqa: BLE001 -- some configs live under a "_e" (LongBench-E) name
-            ds = load_dataset("THUDM/LongBench", task + "_e", split="test")
-        for row in ds.select(range(min(n_per, len(ds)))):
+        name = f"data/{task}.jsonl"
+        if name not in z.namelist():
+            print(f"  [skip task {task}] not found in data.zip")
+            continue
+        count = 0
+        for line in z.open(name):
+            if count >= n_per:
+                break
+            row = json.loads(line)
             golds = row["answers"] if isinstance(row["answers"], list) else [row["answers"]]
             items.append((row["context"], row["input"], [str(g) for g in golds], ti))
+            count += 1
     return items, tasks
 
 
