@@ -153,7 +153,37 @@ def run_shift(stream, budget, decay=0.995):
     return curves
 
 
-def _write_outputs(stationary, budgets, curves, shift_budget, meta, quiet=False):
+def load_mooncake(path: str, n_prompts: int) -> list[tuple]:
+    """Load a Mooncake-format trace (JSONL) as a stream of prefix-block-id tuples.
+
+    Each line is a request ``{timestamp, input_length, output_length, hash_ids}`` where
+    ``hash_ids`` is the sequence of KV-cache block hashes; shared leading ids are a shared prefix.
+    We treat each hash-id sequence as the request's cacheable token path (one "token" = one
+    512-token block), so ``run_cache`` measures reused prefix *blocks* on a real production trace.
+    Lines are kept in trace (timestamp) order, so the over-time curve reflects the real workload.
+    """
+    stream = []
+    for line in Path(path).read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except Exception:  # noqa: BLE001
+            continue
+        ids = rec.get("hash_ids") or []
+        if len(ids) >= 2:
+            stream.append(tuple(int(x) for x in ids))
+        if 0 < n_prompts <= len(stream):
+            break
+    return stream
+
+
+def _stem(tag):
+    return "prefix_cache" + (f"_{tag}" if tag else "")
+
+
+def _write_outputs(stationary, budgets, curves, shift_budget, meta, quiet=False, tag=""):
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         **meta,
@@ -162,7 +192,7 @@ def _write_outputs(stationary, budgets, curves, shift_budget, meta, quiet=False)
         "shift_budget": shift_budget,
         "shift_final_savings": {p: float(curves[p][-1]) for p in POLICIES},
     }
-    (FIGURE_DIR / "prefix_cache_results.json").write_text(json.dumps(payload, indent=2))
+    (FIGURE_DIR / f"{_stem(tag)}_results.json").write_text(json.dumps(payload, indent=2))
 
     # LaTeX table: savings at the largest budget (stationary) + final savings after the shift.
     big = float(np.argmax(budgets))
@@ -184,7 +214,7 @@ def _write_outputs(stationary, budgets, curves, shift_budget, meta, quiet=False)
         f"Policy & Stationary (B={budgets[-1]}) & After shift (B={shift_budget}) \\\\\n\\midrule\n"
         + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
     )
-    (FIGURE_DIR / "prefix_cache_table.tex").write_text(tex)
+    (FIGURE_DIR / f"{_stem(tag)}_table.tex").write_text(tex)
     del big
 
     if quiet:
@@ -198,13 +228,13 @@ def _write_outputs(stationary, budgets, curves, shift_budget, meta, quiet=False)
     for p in POLICIES:
         print(f"    {p:9s} {curves[p][-1]:.2f}")
     try:
-        out = _plot(stationary, budgets, curves, shift_budget, meta)
+        out = _plot(stationary, budgets, curves, shift_budget, meta, tag=tag)
         print(f"\nwrote json+table to {FIGURE_DIR} and figure to {out} (+ .png)")
     except Exception as e:  # noqa: BLE001
         print(f"\nwrote json+table to {FIGURE_DIR} (figure skipped: {type(e).__name__}: {e})")
 
 
-def _plot(stationary, budgets, curves, shift_budget, meta):
+def _plot(stationary, budgets, curves, shift_budget, meta, tag=""):
     set_style()
     import matplotlib.pyplot as plt
 
@@ -221,20 +251,27 @@ def _plot(stationary, budgets, curves, shift_budget, meta):
     rounds = np.arange(1, n + 1)
     for p in POLICIES:
         axB.plot(rounds, curves[p], color=PALETTE_BY[p], label=p)
-    axB.axvline(n // 2, color=PALETTE["gray"], ls="--", lw=1)
-    axB.text(n // 2, axB.get_ylim()[1] * 0.5, " popularity shift", color=PALETTE["gray"],
-             fontsize=8, rotation=90)
-    axB.set_xlabel("prompts seen")
-    axB.set_ylabel("tokens reused per prompt (rolling)")
-    axB.set_title(f"Real popularity shift (B={shift_budget}): adaptive tracks it")
+    if not meta.get("real_order"):
+        axB.axvline(n // 2, color=PALETTE["gray"], ls="--", lw=1)
+        axB.text(n // 2, axB.get_ylim()[1] * 0.5, " popularity shift", color=PALETTE["gray"],
+                 fontsize=8, rotation=90)
+        axB.set_title(f"Real popularity shift (B={shift_budget}): adaptive tracks it")
+    else:
+        axB.set_title(f"Real trace order (B={shift_budget}): savings over time")
+    axB.set_xlabel("requests seen")
+    axB.set_ylabel("blocks reused per request (rolling)" if meta.get("real_order")
+                   else "tokens reused per prompt (rolling)")
     axB.legend(loc="lower left")
-    fig.suptitle(f"Prefix-cache management on real prompts ({meta['source']})")
+    fig.suptitle(f"Prefix-cache management ({meta['source']})")
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    return str(save_figure(fig, "prefix_cache"))
+    return str(save_figure(fig, _stem(tag)))
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--mooncake-trace", default="",
+                    help="path to a Mooncake-format JSONL trace (uses hash_ids as the block stream)")
+    ap.add_argument("--tag", default="", help="suffix for output files (e.g. mooncake_conversation)")
     ap.add_argument("--corpus-file", default="", help="local prompt log, one prompt per line")
     ap.add_argument("--dataset", default="tatsu-lab/alpaca", help="HF dataset (if no --corpus-file)")
     ap.add_argument("--split", default="train")
@@ -251,7 +288,19 @@ def main() -> None:
     budgets = [int(x) for x in args.budgets.split(",") if x.strip()]
     rng = np.random.default_rng(args.seed)
 
-    if args.mock:
+    if args.mooncake_trace:
+        try:
+            stream = load_mooncake(args.mooncake_trace, args.n_prompts)
+            if len(stream) < 100:
+                raise RuntimeError(f"only {len(stream)} usable requests in the trace")
+            shift_stream = stream  # real trace order -> the over-time curve is the real workload
+            src = f"Mooncake trace ({Path(args.mooncake_trace).stem})"
+            meta = {"source": src, "tokenizer": "block-hash-ids", "n_prompts": len(stream),
+                    "real_order": True}
+        except Exception as e:  # noqa: BLE001
+            print(f"Could not load Mooncake trace ({type(e).__name__}: {e}).")
+            return
+    elif args.mock:
         env = PrefixCacheEnv(rng=np.random.default_rng(args.seed))
         stream = env.generate_stream(20000)
         shift_stream = PrefixCacheEnv(
@@ -277,10 +326,10 @@ def main() -> None:
             )
             return
 
-    print(f"prefix cache: {meta['n_prompts']} prompts, tokenizer {meta['tokenizer']}")
+    print(f"prefix cache: {meta['n_prompts']} requests, tokenizer {meta['tokenizer']}")
     stationary = run_stationary(stream, budgets, decay=args.decay)
     curves = run_shift(shift_stream, args.shift_budget, decay=args.decay)
-    _write_outputs(stationary, budgets, curves, args.shift_budget, meta)
+    _write_outputs(stationary, budgets, curves, args.shift_budget, meta, tag=args.tag)
 
 
 if __name__ == "__main__":
