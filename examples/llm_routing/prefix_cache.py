@@ -179,6 +179,35 @@ def load_mooncake(path: str, n_prompts: int) -> list[tuple]:
     return stream
 
 
+def load_chat(name: str, n_prompts: int, split: str = "train") -> list[str]:
+    """Load a real multi-turn chat dataset (WildChat-1M / LMSYS-Chat-1M format) as a prompt stream.
+
+    Each conversation is a list of ``{role, content}`` turns. We emit the *cumulative* context at
+    every user turn (turn N's request contains turns 1..N-1 + the new message), so within a
+    conversation successive requests share a deep prefix, and across conversations shared
+    system prompts / openings share a prefix --- the real multi-turn serving pattern that prefix
+    caching exploits. Requests are yielded in dataset (≈ arrival) order.
+    """
+    from datasets import load_dataset
+
+    ds = load_dataset(name, split=split, streaming=True)
+    prompts: list[str] = []
+    for row in ds:
+        conv = row.get("conversation") or row.get("messages") or []
+        ctx = ""
+        for turn in conv:
+            content = turn.get("content", "") or ""
+            role = turn.get("role", "")
+            if role == "user":
+                ctx = (ctx + "\n" if ctx else "") + content
+                prompts.append(ctx)
+            else:
+                ctx = ctx + "\n" + content
+        if 0 < n_prompts <= len(prompts):
+            break
+    return prompts[:n_prompts] if n_prompts > 0 else prompts
+
+
 def _stem(tag):
     return "prefix_cache" + (f"_{tag}" if tag else "")
 
@@ -271,6 +300,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mooncake-trace", default="",
                     help="path to a Mooncake-format JSONL trace (uses hash_ids as the block stream)")
+    ap.add_argument("--chat-dataset", default="",
+                    help="real multi-turn chat dataset (e.g. allenai/WildChat-1M, lmsys/lmsys-chat-1m)")
     ap.add_argument("--tag", default="", help="suffix for output files (e.g. mooncake_conversation)")
     ap.add_argument("--corpus-file", default="", help="local prompt log, one prompt per line")
     ap.add_argument("--dataset", default="tatsu-lab/alpaca", help="HF dataset (if no --corpus-file)")
@@ -299,6 +330,20 @@ def main() -> None:
                     "real_order": True}
         except Exception as e:  # noqa: BLE001
             print(f"Could not load Mooncake trace ({type(e).__name__}: {e}).")
+            return
+    elif args.chat_dataset:
+        try:
+            prompts = load_chat(args.chat_dataset, args.n_prompts, args.split)
+            tok_name, encode = get_tokenizer()
+            stream = tokenize_stream(prompts, encode, args.max_tokens)
+            if len(stream) < 100:
+                raise RuntimeError(f"only {len(stream)} usable requests from {args.chat_dataset}")
+            shift_stream = stream  # real (arrival-order) chat stream
+            meta = {"source": f"{args.chat_dataset} chat trace", "tokenizer": tok_name,
+                    "n_prompts": len(stream), "real_order": True}
+        except Exception as e:  # noqa: BLE001
+            print(f"Could not load chat dataset {args.chat_dataset} ({type(e).__name__}: {e}). "
+                  "Gated datasets (e.g. lmsys/lmsys-chat-1m) need access + an HF token.")
             return
     elif args.mock:
         env = PrefixCacheEnv(rng=np.random.default_rng(args.seed))
