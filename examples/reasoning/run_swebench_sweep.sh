@@ -48,13 +48,13 @@ run_cell "us.anthropic.claude-sonnet-4-5-20250929-v1:0" "sonnet45" 3
 
 # Priority 2: capability sweep at the headline depth (=2) for the other four models.
 for mm in "${MODELS[@]:1}"; do
-  run_cell "${mm%%:*}" "${mm##*:}" 2
+  run_cell "${mm%:*}" "${mm##*:}" 2   # %: strips from the LAST colon (model ids contain ':0')
 done
 
 # Priority 3: remaining budget points (depths 1 and 3) for the other four models.
 for depth in 1 3; do
   for mm in "${MODELS[@]:1}"; do
-    run_cell "${mm%%:*}" "${mm##*:}" "$depth"
+    run_cell "${mm%:*}" "${mm##*:}" "$depth"
   done
 done
 
