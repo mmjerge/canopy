@@ -66,13 +66,18 @@ EVALS = ["arc", "bbh", "gpqa", "gsm8k", "harness_truthfulqa_mc_0", "hellaswag", 
          "mmlu", "humaneval", "mbpp", "winogrande", "mt_bench"]
 
 # tree / cost model (probes cheap, leaf evals expensive) -- shared with the synthetic study
-BRANCHING, DEPTH = 10, 3          # 1000 leaves == RouterEval hard pool of 1000 models
+BRANCHING = 10                    # RouterEval hard pools are 10 / 100 / 1000 == 10^{1,2,3}
+DEPTH = 3                         # set from --pool-size in main() (10^DEPTH leaves)
 NOISE, PROBE_NOISE = 0.06, 0.06   # finite-sample evaluation noise (accuracies in [0,1])
 PROBE_COST, LEAF_COST = 0.05, 1.0
 BEAM = 30
 CERT_SAMPLES = 12                 # random-path probes per cell for the certificate pre-pass
-CERT_LEVELS = [1, 2]              # internal levels probed to estimate the certificate
 Z_SPREAD = 1.0                    # multiplier on the estimated expected max-minus-mean bound
+
+
+def cert_levels() -> list[int]:
+    """Internal levels probed to estimate the certificate (all levels between root and leaves)."""
+    return list(range(1, DEPTH))
 
 
 def _load_zip():
@@ -137,12 +142,15 @@ def estimate_certificate(leaf_means: np.ndarray, seed: int):
     expected max-minus-mean of that many leaves], and (b) the flagged high-dispersion cells
     (multiscale edge map) as relaxed_ranges for discontinuity-guided sampling.
     """
+    levels = cert_levels()
+    if not levels:  # depth-1 tree: no internal grouping, pure leaf race
+        return (lambda _l: 1.0), [], 0.0
     env = make_env(leaf_means, seed)
     em = multiscale_edge_map(
-        env, np.random.default_rng(seed), levels=CERT_LEVELS, n_samples_per_cell=CERT_SAMPLES
+        env, np.random.default_rng(seed), levels=levels, n_samples_per_cell=CERT_SAMPLES
     )
     per_level = {}
-    for lvl in CERT_LEVELS:
+    for lvl in levels:
         m = BRANCHING ** (DEPTH - lvl)  # leaves under a level-`lvl` node
         # a robust (high-quantile) within-subtree spread across cells at this level
         ws = float(np.quantile(em.within_std[lvl], 0.90))
@@ -157,7 +165,7 @@ def estimate_certificate(leaf_means: np.ndarray, seed: int):
             return coarsest
         return per_level[max(per_level)]  # finest estimated level for anything deeper
 
-    n_plays = sum(BRANCHING**lvl * CERT_SAMPLES for lvl in CERT_LEVELS)
+    n_plays = sum(BRANCHING**lvl * CERT_SAMPLES for lvl in levels)
     return spread, em.finest_ranges(), n_plays * PROBE_COST
 
 
@@ -191,6 +199,8 @@ def main() -> None:
     ap.add_argument("--plot", action="store_true")
     args = ap.parse_args()
 
+    global DEPTH
+    DEPTH = round(np.log(args.pool_size) / np.log(BRANCHING))  # 10/100/1000 -> depth 1/2/3
     n_leaves = BRANCHING**DEPTH
     if args.pool_size != n_leaves:
         print(f"note: tree has {n_leaves} leaves; --pool-size {args.pool_size} will be "
@@ -255,12 +265,14 @@ def main() -> None:
         rows_by_budget.append((budget, row))
         print(f"{budget:7.0f} {row[0][0]:19.3f} {row[1][0]:15.3f} {row[2][0]:9.3f}")
 
-    _write_table(args, evals=len(trees), rows=rows_by_budget, labels=labels)
+    # 1000-model pool keeps the headline filename; other scales get a suffix
+    suffix = "" if args.pool_size == 1000 else f"_{args.pool_size}"
+    _write_table(args, evals=len(trees), rows=rows_by_budget, labels=labels, suffix=suffix)
     if args.plot:
-        _plot(args, means, sems, labels)
+        _plot(args, means, sems, labels, suffix=suffix)
 
 
-def _write_table(args, evals, rows, labels) -> None:
+def _write_table(args, evals, rows, labels, suffix="") -> None:
     FIGDIR.mkdir(parents=True, exist_ok=True)
     header = " & ".join(["Cost budget"] + [f"{int(b)}" for b, _ in rows]) + " \\\\"
     lines = []
@@ -282,11 +294,12 @@ def _write_table(args, evals, rows, labels) -> None:
         f"\\begin{{tabular}}{{{col}}}\n\\toprule\n{header}\n\\midrule\n"
         + "\n".join(lines) + "\n\\bottomrule\n\\end{tabular}\n"
     )
-    (FIGDIR / "real_topk_identification_table.tex").write_text(tex)
-    print(f"\nwrote table to {FIGDIR}/real_topk_identification_table.tex")
+    fname = f"real_topk_identification{suffix}_table.tex"
+    (FIGDIR / fname).write_text(tex)
+    print(f"\nwrote table to {FIGDIR}/{fname}")
 
 
-def _plot(args, means, sems, labels) -> None:
+def _plot(args, means, sems, labels, suffix="") -> None:
     try:
         import matplotlib.pyplot as plt
 
@@ -311,7 +324,7 @@ def _plot(args, means, sems, labels) -> None:
     ax.set_ylim(0, 1.02)
     ax.legend(loc="lower right")
     fig.tight_layout()
-    out = save_figure(fig, "real_topk_identification")
+    out = save_figure(fig, f"real_topk_identification{suffix}")
     print(f"saved chart to {out} (+ .png)")
 
 
