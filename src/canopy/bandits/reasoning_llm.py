@@ -64,6 +64,41 @@ def extract_answer(text: str) -> str | None:
     return _normalize(nums[-1]) if nums else None
 
 
+def extract_boxed(text: str) -> str | None:
+    """Extract the last ``\\boxed{...}`` answer (MATH convention), else fall back to
+    the GSM8K-style extraction so prose answers still grade when parseable."""
+    start = text.rfind("\\boxed{")
+    if start == -1:
+        return extract_answer(text)
+    i, depth = start + len("\\boxed{"), 1
+    out = []
+    while i < len(text) and depth > 0:
+        ch = text[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        out.append(ch)
+        i += 1
+    ans = "".join(out).strip().replace(" ", "").replace("\\!", "").replace("\\,", "")
+    return _normalize(ans) if ans else None
+
+
+def extract_letter(text: str, letters: str = "ABCD") -> str | None:
+    """Extract the final multiple-choice letter (GPQA/MMLU convention): scan from the
+    end for a standalone option letter."""
+    for i in range(len(text) - 1, -1, -1):
+        ch = text[i].upper()
+        if ch in letters:
+            prev_ok = i == 0 or not text[i - 1].isalnum()
+            next_ok = i == len(text) - 1 or not text[i + 1].isalnum()
+            if prev_ok and next_ok:
+                return ch
+    return None
+
+
 def _normalize(s: str) -> str:
     s = s.replace(",", "").replace("$", "").rstrip(".")
     try:
@@ -103,20 +138,31 @@ class SearchResult:
     budget: Budget = field(default_factory=Budget)
 
 
+ExtractFn = Callable[[str], "str | None"]
+
+
 def best_of_n(
     question: str,
     gold: str,
     generate: GenerateFn,
     n: int,
     max_tokens: int = 512,
+    extract: ExtractFn = extract_answer,
+    solve_template: str | None = None,
 ) -> SearchResult:
-    """Sample ``n`` full solutions and return the majority-vote answer (self-consistency)."""
+    """Sample ``n`` full solutions and return the majority-vote answer (self-consistency).
+
+    ``extract`` parses a completion into a final answer (numeric ``####`` by default;
+    pass :func:`extract_boxed` for MATH or :func:`extract_letter` for multiple choice),
+    and ``solve_template`` overrides the benchmark prompt (must contain ``{q}``).
+    """
+    solve = solve_template or _SOLVE
     budget = Budget()
     votes: Counter[str] = Counter()
     for i in range(n):
-        text = generate(_SOLVE.format(q=question), max_tokens, i)
+        text = generate(solve.format(q=question), max_tokens, i)
         budget.charge(text)
-        a = extract_answer(text)
+        a = extract(text)
         if a is not None:
             votes[a] += 1
     answer = votes.most_common(1)[0][0] if votes else None
@@ -133,6 +179,9 @@ def value_guided_search(
     max_tokens: int = 512,
     value_fn: Callable[[list[str]], float] | None = None,
     final_rollouts: int = 1,
+    extract: ExtractFn = extract_answer,
+    continue_template: str | None = None,
+    rollout_template: str | None = None,
 ) -> SearchResult:
     """Beam/tree search over reasoning steps with cheap-rollout value (multi-fidelity probe).
 
@@ -148,20 +197,22 @@ def value_guided_search(
     given an informative value.
     """
     if value_fn is None:
-        value_fn = _self_consistency
+        value_fn = lambda texts: _self_consistency(texts, extract)  # noqa: E731
+    cont = continue_template or _CONTINUE
+    roll_t = rollout_template or _ROLLOUT
     budget = Budget()
     prefix = ""
     for step in range(n_steps):
         best_step, best_val = None, -1.0
         for c in range(branching):
             cand = generate(
-                _CONTINUE.format(q=question, prefix=prefix), max_tokens // 2, 1000 * step + c
+                cont.format(q=question, prefix=prefix), max_tokens // 2, 1000 * step + c
             )
             budget.charge(cand)
             roll_texts: list[str] = []
             for r in range(rollouts):
                 roll = generate(
-                    _ROLLOUT.format(q=question, prefix=prefix + "\n" + cand),
+                    roll_t.format(q=question, prefix=prefix + "\n" + cand),
                     max_tokens,
                     50_000 + 1000 * (step * branching + c) + r,
                 )
@@ -173,20 +224,123 @@ def value_guided_search(
         prefix = prefix + "\n" + (best_step or "")
     votes: Counter[str] = Counter()
     for f in range(final_rollouts):
-        final = generate(_ROLLOUT.format(q=question, prefix=prefix), max_tokens, 999_000 + f)
+        final = generate(roll_t.format(q=question, prefix=prefix), max_tokens, 999_000 + f)
         budget.charge(final)
-        a = extract_answer(final)
+        a = extract(final)
         if a is not None:
             votes[a] += 1
     answer = votes.most_common(1)[0][0] if votes else None
     return SearchResult(answer=answer, correct=(answer == _normalize(gold)), budget=budget)
 
 
-def _self_consistency(rollout_texts: list[str]) -> float:
+@dataclass
+class StepLog:
+    """Per-step instrumentation of the value-guided descent (one entry per step).
+
+    ``cheap[i]`` is the value the search follows for candidate ``i`` (e.g.
+    self-consistency of its rollouts); ``true[i]`` is the fraction of the same
+    rollouts that actually grade correct against gold -- the ground-truth node value
+    the cheap probe is supposed to track. ``chosen`` is the candidate followed
+    (argmax of cheap).
+    """
+
+    step: int
+    cheap: list[float]
+    true: list[float]
+    chosen: int
+
+    @property
+    def spread(self) -> float:
+        """Sibling true-value spread (max - min): large means a pivotal step."""
+        return max(self.true) - min(self.true)
+
+    @property
+    def hit(self) -> bool:
+        """Did the cheap edge follow the truly-best continuation?"""
+        return self.true[self.chosen] == max(self.true)
+
+    @property
+    def gap(self) -> float:
+        """True value forgone by following the cheap edge instead of the best."""
+        return max(self.true) - self.true[self.chosen]
+
+
+def instrumented_value_guided_search(
+    question: str,
+    gold: str,
+    generate: GenerateFn,
+    branching: int = 3,
+    n_steps: int = 4,
+    rollouts: int = 2,
+    max_tokens: int = 512,
+    value_fn: Callable[[list[str]], float] | None = None,
+    final_rollouts: int = 1,
+    extract: ExtractFn = extract_answer,
+    continue_template: str | None = None,
+    rollout_template: str | None = None,
+) -> tuple[SearchResult, list[StepLog]]:
+    """:func:`value_guided_search` with per-node instrumentation.
+
+    Identical descent (same prompts, same seeds, same cheap-value choices), but each
+    candidate's rollouts are additionally graded against ``gold`` to log the *true*
+    node value next to the *cheap* one -- the measurement behind the almost
+    tree-K-Lipschitz characterization (cheap-vs-true correlation = the backbone;
+    sibling true-value spread = the violations). Grading uses the gold answer, so this
+    is an offline analysis tool, not a deployable search.
+    """
+    if value_fn is None:
+        value_fn = lambda texts: _self_consistency(texts, extract)  # noqa: E731
+    cont = continue_template or _CONTINUE
+    roll_t = rollout_template or _ROLLOUT
+    budget = Budget()
+    prefix = ""
+    logs: list[StepLog] = []
+    gold_norm = _normalize(gold)
+    for step in range(n_steps):
+        cheap_vals: list[float] = []
+        true_vals: list[float] = []
+        cands: list[str] = []
+        for c in range(branching):
+            cand = generate(
+                cont.format(q=question, prefix=prefix), max_tokens // 2, 1000 * step + c
+            )
+            budget.charge(cand)
+            roll_texts: list[str] = []
+            for r in range(rollouts):
+                roll = generate(
+                    roll_t.format(q=question, prefix=prefix + "\n" + cand),
+                    max_tokens,
+                    50_000 + 1000 * (step * branching + c) + r,
+                )
+                budget.charge(roll)
+                roll_texts.append(roll)
+            cheap_vals.append(value_fn(roll_texts))
+            true_vals.append(
+                float(sum(extract(t) == gold_norm for t in roll_texts)) / max(1, len(roll_texts))
+            )
+            cands.append(cand)
+        chosen = int(max(range(branching), key=lambda i: cheap_vals[i]))
+        logs.append(StepLog(step=step, cheap=cheap_vals, true=true_vals, chosen=chosen))
+        prefix = prefix + "\n" + cands[chosen]
+    votes: Counter[str] = Counter()
+    for f in range(final_rollouts):
+        final = generate(roll_t.format(q=question, prefix=prefix), max_tokens, 999_000 + f)
+        budget.charge(final)
+        a = extract(final)
+        if a is not None:
+            votes[a] += 1
+    answer = votes.most_common(1)[0][0] if votes else None
+    return (
+        SearchResult(answer=answer, correct=(answer == gold_norm), budget=budget),
+        logs,
+    )
+
+
+def _self_consistency(rollout_texts: list[str], extract: ExtractFn = extract_answer) -> float:
     """Default value: size of the largest agreeing answer set over the rollouts (in [0,1])."""
     answers: Counter[str] = Counter()
     for t in rollout_texts:
-        a = extract_answer(t)
+        a = extract(t)
         if a is not None:
             answers[a] += 1
     if not answers or not rollout_texts:

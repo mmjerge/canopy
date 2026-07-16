@@ -56,6 +56,36 @@ uv run python examples/reasoning/reasoning_search_demo.py
 uv run --extra plot python examples/reasoning/reasoning_search_demo.py   # success-vs-budget + K-scaling
 ```
 
+## The scope map: when the advantage exists at all
+
+The two conditions above are *quantitative* knobs, and real benchmarks differ on exactly
+them. `scoped_success_rate` / `value_guided_search_scoped` add the two knobs to the
+synthetic model:
+
+* **saturation `s`** — fraction of instances any method solves (no headroom / small
+  effective `K`): GSM8K and HumanEval/MBPP for a strong model are near-saturated;
+* **probe informativeness `q`** — probability a cheap probe batch actually reflects the
+  child it scores: a single public assert that plausible-but-wrong code passes is a
+  low-`q` probe; execution-graded probes on repo-level tasks (patch applies / imports /
+  targeted tests) are high-`q`, and come with a genuine cost gradient
+  (`c_p/c_l ~ 1e-2 .. 1e-3`).
+
+The phase diagram (`examples/reasoning/probe_scope_demo.py`, depth 8, K=8, budget 1024,
+200 seeds/cell) shows the paired value-guided − best-of-N gap is **+0.81** in the
+unsaturated/informative corner, **≈ 0** along the saturated edge, and **−0.04 to −0.07**
+along the uninformative edge — the search overhead actively hurts when the value edge
+carries no signal, reproducing the sign and magnitude of the measured MBPP null. The
+HumanEval/MBPP null and the MATH win are therefore the *same* theory evaluated at
+different `(s, q)`; repo-level coding (SWE-bench / RepoBench style: a real
+file → function → edit decision tree, execution probes, unsaturated for a capable agent)
+sits in the winning corner and is the predicted next instantiation. The scope predictions
+are encoded as tests in `tests/test_reasoning.py` (gain requires both knobs; collapses
+proportionally with saturation; reverses sign as `q → 0`).
+
+```bash
+uv run --extra plot python examples/reasoning/probe_scope_demo.py
+```
+
 ## From synthetic to a real benchmark (no synthetic shortcuts)
 
 The result above is **synthetic** — no LLM is involved; the "reward" and "value" are formulas.

@@ -19,12 +19,97 @@ unchanged.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from collections.abc import Callable, Hashable
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import NDArray
 
 from canopy.bandits.rewards import geometric_sigma, hierarchical_gaussian_leaf_means
+
+
+def _default_region(obs: str, step: int, stuck: int) -> tuple[bool, bool]:
+    """Small discrete turn context: (is this turn hard?, is the episode late-stage?)."""
+    hard = stuck >= 1 or any(
+        k in obs.lower() for k in ("error", "cannot", "invalid", "not found")
+    )
+    return (hard, step >= 4)
+
+
+@dataclass
+class ContextualUCBRouter:
+    """Learned per-call contextual router with episodic Monte-Carlo credit assignment.
+
+    The per-turn instantiation of the depth-one engine for long-horizon agents: the
+    context (region) of a turn is a small discrete feature of its difficulty and phase
+    (``region_fn(obs, step, stuck)``; default: hard-or-stuck x early-vs-late), the arm
+    is a model, and the quality signal is the episode's terminal reward credited back
+    to every (region, arm) pull made during that episode.
+
+    Protocol (matches the tau-bench episode runner):
+      * ``reset()``       at episode start (clears the episode's pull log only --
+        learned statistics persist across episodes);
+      * ``router(obs, step, stuck) -> model``  per turn (UCB over arms in the region);
+      * ``finish(reward)`` at episode end (credits the pulls).
+
+    With ``region_fn=lambda *_: 0`` this is the structure-blind "flat" learner -- the
+    honest learning baseline that isolates the value of the region structure.
+
+    ``explore_eps`` adds a small uniform-random arm choice per turn. This is not just
+    exploration: because every pull in an episode shares one terminal reward, regions
+    whose UCB statistics evolve in lockstep would choose perfectly *correlated* arms,
+    and the shared reward then cannot identify which region's choice helped (the
+    per-region means never separate). The jitter decorrelates the per-region designs,
+    making the episodic credit identifiable.
+    """
+
+    arms: list[str]
+    c: float = 0.5
+    region_fn: Callable[[str, int, int], Hashable] = _default_region
+    explore_eps: float = 0.1
+    rng: np.random.Generator = field(default_factory=np.random.default_rng)
+    counts: dict = field(default_factory=dict)  # region -> per-arm pull counts
+    sums: dict = field(default_factory=dict)  # region -> per-arm reward sums
+    _episode_pulls: list = field(default_factory=list)
+
+    def reset(self) -> None:
+        self._episode_pulls = []
+
+    def __call__(self, obs: str, step: int, stuck: int) -> str:
+        region = self.region_fn(obs, step, stuck)
+        n = self.counts.setdefault(region, np.zeros(len(self.arms)))
+        s = self.sums.setdefault(region, np.zeros(len(self.arms)))
+        if self.explore_eps > 0 and self.rng.random() < self.explore_eps:
+            best = int(self.rng.integers(0, len(self.arms)))
+        else:
+            t = float(n.sum()) + 1.0
+            best, best_u = 0, -math.inf
+            for a in range(len(self.arms)):
+                u = (
+                    math.inf
+                    if n[a] == 0
+                    else s[a] / n[a] + self.c * math.sqrt(2.0 * math.log(t) / n[a])
+                )
+                if u > best_u:
+                    best_u, best = u, a
+        self._episode_pulls.append((region, best))
+        return self.arms[best]
+
+    def finish(self, reward: float) -> None:
+        """Credit the episode's terminal reward to every (region, arm) pull it made."""
+        for region, arm in self._episode_pulls:
+            self.counts[region][arm] += 1.0
+            self.sums[region][arm] += float(reward)
+        self._episode_pulls = []
+
+    def policy(self) -> dict:
+        """Greedy learned policy: region -> arm name (for inspection/reporting)."""
+        out = {}
+        for region, n in self.counts.items():
+            means = np.divide(self.sums[region], n, out=np.full(len(self.arms), -np.inf), where=n > 0)
+            out[region] = self.arms[int(np.argmax(means))]
+        return out
 
 
 @dataclass

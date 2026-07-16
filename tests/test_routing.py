@@ -81,3 +81,67 @@ def test_hierarchical_beats_flat_when_strengths_are_regional():
         hier.append(h.final_regret)
         flat.append(f.final_regret)
     assert np.mean(hier) < np.mean(flat)
+
+
+# --- learned per-call contextual router (agentic per-turn routing) ------------------
+
+
+def _run_episodes(router, n_episodes: int, rng: np.random.Generator) -> float:
+    """Episodic environment where the best arm depends on the region.
+
+    Turns alternate easy/hard ('error' in obs); arm 'cheap' succeeds on easy turns,
+    arm 'strong' on hard ones. Episode reward = fraction of turns routed correctly.
+    """
+    total = 0.0
+    for _ in range(n_episodes):
+        router.reset()
+        correct = 0
+        for step in range(6):
+            hard = step % 2 == 1
+            obs = "tool error occurred" if hard else "all good"
+            arm = router(obs, step, stuck=0)
+            correct += int(arm == ("strong" if hard else "cheap"))
+        reward = correct / 6 + rng.normal(0, 0.02)
+        router.finish(reward)
+        total += correct / 6
+    return total / n_episodes
+
+
+def test_contextual_ucb_router_learns_per_region_policy():
+    from canopy.bandits import ContextualUCBRouter
+
+    rng = np.random.default_rng(0)
+    regional = ContextualUCBRouter(["cheap", "strong"], c=0.3, rng=np.random.default_rng(7))
+    _run_episodes(regional, 300, rng)
+    policy = regional.policy()
+    # the learned greedy policy routes hard turns to 'strong' and easy ones to 'cheap'
+    assert policy[(True, False)] == "strong" or policy.get((True, True)) == "strong"
+    assert policy[(False, False)] == "cheap"
+
+
+def test_regional_beats_flat_when_structure_exists():
+    from canopy.bandits import ContextualUCBRouter
+
+    rng = np.random.default_rng(1)
+    regional = ContextualUCBRouter(["cheap", "strong"], c=0.3, rng=np.random.default_rng(8))
+    flat = ContextualUCBRouter(
+        ["cheap", "strong"], c=0.3, region_fn=lambda *_: 0, rng=np.random.default_rng(9)
+    )
+    _run_episodes(regional, 300, rng)  # warmup / learning phase
+    _run_episodes(flat, 300, rng)
+    late_regional = _run_episodes(regional, 100, rng)
+    late_flat = _run_episodes(flat, 100, rng)
+    # flat cannot express a per-region policy: it caps at ~0.5 correct routing
+    assert late_regional > late_flat + 0.2
+
+
+def test_router_reset_keeps_learned_state():
+    from canopy.bandits import ContextualUCBRouter
+
+    router = ContextualUCBRouter(["a", "b"])
+    router("x", 0, 0)
+    router.finish(1.0)
+    before = {k: v.copy() for k, v in router.counts.items()}
+    router.reset()
+    assert all((router.counts[k] == before[k]).all() for k in before)  # stats persist
+    assert router._episode_pulls == []  # only the episode log clears

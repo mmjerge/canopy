@@ -7,9 +7,70 @@ import numpy as np
 from canopy.bandits.reasoning_llm import (
     best_of_n,
     extract_answer,
+    extract_boxed,
+    extract_letter,
     is_correct,
     value_guided_search,
 )
+
+
+def test_boxed_extraction():
+    assert extract_boxed(r"... so the answer is \boxed{42}.") == "42"
+    assert extract_boxed(r"nested \boxed{\frac{1}{2}} done") == r"\frac{1}{2}"
+    # last boxed wins; falls back to numeric extraction when no \boxed present
+    assert extract_boxed(r"\boxed{1} then finally \boxed{7}") == "7"
+    assert extract_boxed("no box, answer is 12") == "12"
+    assert extract_boxed("nothing here") is None
+
+
+def test_letter_extraction():
+    assert extract_letter("I think the answer is B.") == "B"
+    assert extract_letter("Answer: C") == "C"
+    # standalone letters only: 'A' inside a word must not match
+    assert extract_letter("Available data suggests... Answer: D") == "D"
+    assert extract_letter("no letters 123") is None
+
+
+def test_instrumented_search_logs_cheap_and_true():
+    """The instrumented descent logs per-candidate cheap vs true values and follows
+    the cheap argmax; with an informative generator the pivotal hit is recorded."""
+    from canopy.bandits.reasoning_llm import instrumented_value_guided_search
+
+    # generator: candidate c=0 leads to correct rollouts ('#### 7'), c>0 to wrong ones.
+    # rollout seeds are 50_000 + 1000*(step*branching + c) + r, so c = (seed-50_000)//1000 % 3.
+    def gen(prompt, max_tokens, seed):
+        if "Next step:" in prompt:
+            return f"step{seed % 1000}"
+        if 50_000 <= seed < 999_000:
+            c = ((seed - 50_000) // 1000) % 3
+            return "#### 7" if c == 0 else "#### 1"
+        return "#### 7"  # final rollouts from the (correct) chosen prefix
+
+    res, logs = instrumented_value_guided_search(
+        "q", gold="7", generate=gen, branching=3, n_steps=2, rollouts=2
+    )
+    assert len(logs) == 2
+    for lg in logs:
+        assert len(lg.cheap) == 3 and len(lg.true) == 3
+        assert lg.chosen == int(np.argmax(lg.cheap))  # follows the cheap edge
+        assert 0.0 <= lg.spread <= 1.0 and lg.gap >= 0.0
+    # candidate 0's rollouts grade correct -> true value 1.0, others 0.0 -> pivotal
+    assert logs[0].true[0] == 1.0 and max(logs[0].true[1:]) == 0.0
+    assert logs[0].spread == 1.0
+
+
+def test_extract_fn_plumbs_through_search():
+    """best_of_n / value_guided_search grade with the supplied extractor."""
+
+    def gen(prompt, max_tokens, seed):
+        return r"reasoning... \boxed{9}"
+
+    r = best_of_n("q", gold="9", generate=gen, n=3, extract=extract_boxed)
+    assert r.correct and r.answer == "9"
+    r2 = value_guided_search(
+        "q", gold="9", generate=gen, branching=2, n_steps=2, rollouts=1, extract=extract_boxed
+    )
+    assert r2.correct and r2.answer == "9"
 
 
 def test_answer_extraction_and_grading():

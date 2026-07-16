@@ -52,6 +52,44 @@ def test_from_moments_matches_direct():
     se = np.array([np.sum(np.exp(lam * x)) for lam in lambdas])
     se2 = np.array([np.sum(np.exp(2 * lam * x)) for lam in lambdas])
     from_mom = mgf_bound_from_moments(
-        len(x), float(x.mean()), se, se2, lambdas, 64, 0.1, delta=0.05
+        len(x),
+        float(x.mean()),
+        se,
+        se2,
+        lambdas,
+        64,
+        0.1,
+        delta=0.05,
+        var_x=float(x.var(ddof=1)),
     )
     assert abs(direct - from_mom) < 1e-6
+
+
+def test_from_moments_without_var_is_conservative():
+    """Omitting var_x falls back to a Hoeffding mean radius, which can only enlarge it."""
+    leaf_means = np.clip(0.4 + 0.15 * np.random.default_rng(7).standard_normal(64), 0, 1)
+    x = _sample(leaf_means, 3000, 0.1, seed=8)
+    lambdas = np.array([0.5, 1.0, 2.0, 4.0, 8.0])
+    se = np.array([np.sum(np.exp(lam * x)) for lam in lambdas])
+    se2 = np.array([np.sum(np.exp(2 * lam * x)) for lam in lambdas])
+    with_var = mgf_bound_from_moments(
+        len(x), float(x.mean()), se, se2, lambdas, 64, 0.1, var_x=float(x.var(ddof=1))
+    )
+    without_var = mgf_bound_from_moments(len(x), float(x.mean()), se, se2, lambdas, 64, 0.1)
+    assert without_var >= with_var
+
+
+def test_mgf_bound_nominal_coverage():
+    """Calibration: across many independent probe draws, the 1-delta bound fails at most
+    ~delta of the time (plus Monte-Carlo slack). Guards the confidence accounting -- e.g.
+    dropping the probe-mean confidence radius makes the bound under-cover."""
+    inst_rng = np.random.default_rng(11)
+    leaf_means = np.clip(0.5 + 0.2 * inst_rng.standard_normal(64), 0, 1)
+    true_b = float(leaf_means.max() - leaf_means.mean())
+    delta, trials, n = 0.1, 400, 300
+    violations = sum(
+        mgf_bound(_sample(leaf_means, n, 0.1, seed=1000 + t), 64, 0.1, delta=delta) < true_b
+        for t in range(trials)
+    )
+    # binomial(400, 0.1) has sd ~ 6, so 0.05 slack (20 trials) is ~3 sigma
+    assert violations / trials <= delta + 0.05

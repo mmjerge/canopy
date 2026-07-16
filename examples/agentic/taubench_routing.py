@@ -34,6 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
+from canopy.bandits import ContextualUCBRouter
+
 try:
     from tqdm import tqdm
 except Exception:  # noqa: BLE001 -- progress bar is optional
@@ -197,6 +199,10 @@ def run_taubench_episode(
         obs = new_obs
         if done:
             break
+    # episodic Monte-Carlo credit: learned routers credit the terminal reward to
+    # every (region, model) pull made this episode
+    if hasattr(choose_model, "finish"):
+        choose_model.finish(reward)
     if trace:
         trace(f"  DONE reward={reward} steps={t+1} cost=${cost:.4f}")
     return reward, cost, t + 1
@@ -397,6 +403,9 @@ def main() -> None:
         "--patience", type=int, default=1, help="hard turns before the router escalates"
     )
     ap.add_argument(
+        "--ucb-c", type=float, default=0.5, help="exploration constant of the learned routers"
+    )
+    ap.add_argument(
         "--checkpoint-every",
         type=int,
         default=25,
@@ -460,7 +469,10 @@ def main() -> None:
             print(f"Could not init tau-bench + Bedrock ({type(e).__name__}: {e}); try --mock.")
             return
 
-    # One policy per fixed model (the cloud) plus the tiered router (optionally swept).
+    # One policy per fixed model (the cloud), the tiered heuristic (optionally swept),
+    # and the two online learners: the regional contextual UCB router and its
+    # structure-blind single-region ("flat") ablation -- the learned-vs-heuristic and
+    # regional-vs-flat comparisons the routing claim rests on.
     policies: dict = {}
     for model in pool:
         policies[_short(model)] = lambda obs, t, stuck, mdl=model: mdl
@@ -469,6 +481,10 @@ def main() -> None:
             policies[f"routed(p={p})"] = TieredRouter(pool, patience=p)
     else:
         policies["routed"] = TieredRouter(pool, patience=args.patience)
+    policies["learned (regional)"] = ContextualUCBRouter(pool, c=args.ucb_c)
+    policies["learned (flat)"] = ContextualUCBRouter(
+        pool, c=args.ucb_c, region_fn=lambda *_: 0
+    )
 
     print(
         f"tau-bench {args.env}: {len(task_indices)} tasks x {args.trials} trial(s) "

@@ -22,22 +22,42 @@ from canopy.bandits.online import (
     run_hybrid,
     run_local_lipschitz,
 )
-from canopy.bandits.routing import PrefixTreeRouting, RouteResult, make_routing_scenario, run_router
+from canopy.bandits.routing import (
+    ContextualUCBRouter,
+    PrefixTreeRouting,
+    RouteResult,
+    make_routing_scenario,
+    run_router,
+)
 from canopy.bandits.prefix_cache import CacheResult, PrefixCacheEnv, offline_optimal, run_cache
 from canopy.bandits.reasoning import (
     best_of_n,
     reasoning_tree_rewards,
+    scoped_success_rate,
     success_rate,
     value_guided_search,
+    value_guided_search_scoped,
 )
 from canopy.bandits.reasoning_llm import (
     Budget,
     SearchResult,
+    StepLog,
     extract_answer,
+    extract_boxed,
+    extract_letter,
+    instrumented_value_guided_search,
     is_correct,
 )
 from canopy.bandits.reasoning_llm import best_of_n as best_of_n_llm
 from canopy.bandits.reasoning_llm import value_guided_search as value_guided_search_llm
+from canopy.bandits.code_llm import (
+    CodeResult,
+    best_of_n_exec,
+    exec_value_fn,
+    extract_code,
+    probe_truth_pairs,
+    run_tests,
+)
 from canopy.bandits.agentic import (
     GridWorld,
     PlanResult,
@@ -96,7 +116,18 @@ __all__ = [
     "adversarial_spike_leaf_means",
     "piecewise_smooth_leaf_means",
     "violation_family_leaf_means",
+    "ContextualUCBRouter",
     "PrefixTreeRouting",
+    "CodeResult",
+    "StepLog",
+    "best_of_n_exec",
+    "exec_value_fn",
+    "extract_boxed",
+    "extract_code",
+    "extract_letter",
+    "instrumented_value_guided_search",
+    "probe_truth_pairs",
+    "run_tests",
     "RouteResult",
     "make_routing_scenario",
     "run_router",
@@ -105,6 +136,8 @@ __all__ = [
     "run_cache",
     "offline_optimal",
     "reasoning_tree_rewards",
+    "scoped_success_rate",
+    "value_guided_search_scoped",
     "best_of_n",
     "value_guided_search",
     "success_rate",

@@ -46,3 +46,4 @@ examples/**/*.npz
 paper/
 docs/iclr_outline.md
 docs/paper_outline.md
+Exploiting_Smooth_Tree_Priors_for_Multi_Fidelity_Bandits.pdf
