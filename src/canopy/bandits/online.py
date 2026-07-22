@@ -258,7 +258,7 @@ def run_adaptive_mgf(
         return c * math.sqrt(2.0 * var * log_term / count) + log_term / count
 
     def bias(node: Node) -> float:
-        count, mean, _, se, se2 = stats[node]
+        count, mean, m2, se, se2 = stats[node]
         if count < n_min:
             return math.inf
         return mgf_bound_from_moments(
@@ -270,6 +270,7 @@ def run_adaptive_mgf(
             env.leaves_per_node(node.level),
             env.noise_std,
             delta=delta,
+            var_x=m2 / (count - 1),
         )
 
     cum = 0.0

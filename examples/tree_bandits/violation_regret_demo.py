@@ -72,18 +72,28 @@ def run_all():
             )
             e = env_for(lm, 40 + s)
             blind[i, s] = SuccessiveEliminationTopK(BUDGET, 0.1).run(e, 1).evaluate(e, 1)
+            detect_samples = 40
             rep = detect_violations(
                 env_for(lm, 80 + s),
                 LEVEL,
                 lambda _l: FLOOR,
                 np.random.default_rng(80 + s),
-                n_samples_per_cell=40,
+                n_samples_per_cell=detect_samples,
             )
             detected[i, s] = rep.count
             ranges = [(c * cell, (c + 1) * cell) for c in rep.detected]
+            # charge the detection probes (structural search, c0 in H_edge) against the
+            # hybrid's budget so all methods spend the same total cost
+            detect_cost = (BRANCHING**LEVEL) * detect_samples * PROBE_COST
             e = env_for(lm, 40 + s)
             hybrid[i, s] = (
-                HierarchicalTopK(BUDGET, 0.1, spread=SPREAD, beam_width=BEAM, relaxed_ranges=ranges)
+                HierarchicalTopK(
+                    BUDGET - detect_cost,
+                    0.1,
+                    spread=SPREAD,
+                    beam_width=BEAM,
+                    relaxed_ranges=ranges,
+                )
                 .run(e, 1)
                 .evaluate(e, 1)
             )

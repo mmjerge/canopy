@@ -144,12 +144,22 @@ class ContextualUCBRouter:
     Set ``n_regions=1`` to recover the structure-blind (flat) learner -- the honest baseline that
     sees the same information but no context, exactly as in the routing experiments.
 
+    ``explore_eps`` adds a small uniform-random arm choice per pull. This is not just extra
+    exploration: under *episodic* credit assignment (every pull in an episode credited with one
+    shared terminal reward, as in the tau-bench agent), regions whose UCB statistics evolve in
+    lockstep choose perfectly *correlated* arms, and the shared reward then cannot identify which
+    region's choice helped -- the per-region means never separate. The jitter decorrelates the
+    per-region designs, making the episodic credit identifiable. Set ``explore_eps=0`` for
+    per-pull (immediate-reward) use where the issue does not arise.
+
     Args:
         n_models: Size of the model pool (arms).
         costs: Per-model relative cost, length ``n_models`` (known a priori, e.g. from pricing).
         n_regions: Number of discrete contexts (1 = flat / structure-blind).
         lam: Cost weight in the net utility ``quality - lam*cost``.
         c: UCB exploration constant.
+        explore_eps: Probability of a uniform-random arm per pull (identifiability jitter).
+        rng: Optional generator for the jitter (seedable for reproducible runs).
     """
 
     def __init__(
@@ -159,12 +169,16 @@ class ContextualUCBRouter:
         n_regions: int = 1,
         lam: float = 0.3,
         c: float = 0.4,
+        explore_eps: float = 0.1,
+        rng: np.random.Generator | None = None,
     ) -> None:
         self.n_models = int(n_models)
         self.costs = np.asarray(costs, dtype=np.float64)
         self.n_regions = int(n_regions)
         self.lam = float(lam)
         self.c = float(c)
+        self.explore_eps = float(explore_eps)
+        self.rng = rng or np.random.default_rng()
         self.counts = np.zeros((self.n_models, self.n_regions))
         self.sums = np.zeros((self.n_models, self.n_regions))
         self.t = 0
@@ -173,6 +187,8 @@ class ContextualUCBRouter:
         """Return the arm (model index) maximizing the optimistic net utility in ``region``."""
         region = min(max(region, 0), self.n_regions - 1)
         self.t += 1
+        if self.explore_eps > 0 and self.rng.random() < self.explore_eps:
+            return int(self.rng.integers(0, self.n_models))
         best_m, best_val = 0, -np.inf
         for m in range(self.n_models):
             n = self.counts[m, region]

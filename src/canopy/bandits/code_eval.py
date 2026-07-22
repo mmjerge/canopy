@@ -125,3 +125,32 @@ def select_by_public_tests(answers, gold: dict, timeout: float = 5.0):
         if score > best_score:
             best, best_score = a, score
     return best
+
+
+def public_fraction(code: str, gold: dict, timeout: float = 5.0) -> float:
+    """Fraction of the PUBLIC asserts that ``code`` passes individually (continuous in [0,1]).
+
+    Unlike :func:`passes` (all-or-nothing on the list), each assert runs separately, so a
+    plausible-but-partially-wrong candidate scores between 0 and 1. This is the repaired,
+    continuous cheap probe of the code ladder (docs/code_benchmarks.md, rung 2).
+    """
+    pub = gold.get("public", [])
+    if not code or not pub:
+        return 0.0
+    return sum(passes(code, gold, [a], timeout) for a in pub) / len(pub)
+
+
+def probe_truth_pairs(candidate_texts, gold: dict, timeout: float = 5.0):
+    """Stage-1 gate measurement: per candidate, (cheap public score, true hidden pass).
+
+    Sample candidates elsewhere, then record for each the continuous public-test score (the
+    cheap value the search would follow) and the hidden-suite pass (the truth). The correlation
+    across candidates -- pooled over problems -- is the code analog of the cheap-vs-true
+    node-value correlation measured on MATH: if it is near zero, the theory predicts
+    value-guided search cannot beat best-of-N here, and the race is not worth running.
+    """
+    pairs = []
+    for text in candidate_texts:
+        code = extract_code(text)
+        pairs.append((public_fraction(code, gold, timeout), float(grade_code(code, gold))))
+    return pairs

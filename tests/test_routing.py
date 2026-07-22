@@ -81,3 +81,87 @@ def test_hierarchical_beats_flat_when_strengths_are_regional():
         hier.append(h.final_regret)
         flat.append(f.final_regret)
     assert np.mean(hier) < np.mean(flat)
+
+
+# --- ContextualUCBRouter: episodic credit assignment + identifiability --------------
+
+
+def _run_episodes(router, n_episodes: int, reward_rng: np.random.Generator) -> float:
+    """Episodic environment where the best arm depends on the region.
+
+    Turns alternate easy (region 0) / hard (region 1); arm 0 ('cheap') succeeds on easy
+    turns, arm 1 ('strong') on hard ones. The terminal episode reward -- fraction of
+    turns routed correctly -- is credited to every (region, arm) pull of the episode
+    (Monte-Carlo credit assignment, as in the tau-bench agent loop).
+    """
+    from canopy.bandits import ContextualUCBRouter
+
+    assert isinstance(router, ContextualUCBRouter)
+    total = 0.0
+    for _ in range(n_episodes):
+        pulls = []
+        correct = 0
+        for step in range(6):
+            region = step % 2  # easy, hard, easy, ...
+            arm = router.select(region)
+            pulls.append((region, arm))
+            correct += int(arm == region)  # best arm index == region index
+        reward = correct / 6 + reward_rng.normal(0, 0.02)
+        for region, arm in pulls:
+            router.update(region, arm, reward)
+        total += correct / 6
+    return total / n_episodes
+
+
+def test_contextual_router_learns_per_region_policy_under_episodic_credit():
+    from canopy.bandits import ContextualUCBRouter
+
+    router = ContextualUCBRouter(
+        2, np.zeros(2), n_regions=2, lam=0.0, c=0.3, rng=np.random.default_rng(7)
+    )
+    _run_episodes(router, 300, np.random.default_rng(0))
+    means = np.divide(router.sums, np.maximum(router.counts, 1))
+    assert means[:, 0].argmax() == 0  # easy region -> 'cheap'
+    assert means[:, 1].argmax() == 1  # hard region -> 'strong'
+
+
+def test_jitter_makes_episodic_credit_identifiable():
+    """Without the epsilon jitter, regions explore in lockstep and the shared episodic
+    reward cannot separate per-region arm means -- the failure the jitter exists to fix."""
+    from canopy.bandits import ContextualUCBRouter
+
+    with_jitter = ContextualUCBRouter(
+        2, np.zeros(2), n_regions=2, lam=0.0, c=0.3, rng=np.random.default_rng(8)
+    )
+    late_with = _run_episodes(with_jitter, 300, np.random.default_rng(1))
+    late_with = _run_episodes(with_jitter, 100, np.random.default_rng(2))
+
+    no_jitter = ContextualUCBRouter(2, np.zeros(2), n_regions=2, lam=0.0, c=0.3, explore_eps=0.0)
+    _run_episodes(no_jitter, 300, np.random.default_rng(1))
+    late_without = _run_episodes(no_jitter, 100, np.random.default_rng(2))
+
+    assert late_with > 0.9  # learned the per-region policy
+    assert late_with > late_without + 0.2  # lockstep variant stays near chance (~0.5)
+
+
+def test_flat_router_cannot_express_region_policy():
+    from canopy.bandits import ContextualUCBRouter
+
+    flat = ContextualUCBRouter(
+        2, np.zeros(2), n_regions=1, lam=0.0, c=0.3, rng=np.random.default_rng(9)
+    )
+    _run_episodes(flat, 300, np.random.default_rng(3))
+    late = _run_episodes(flat, 100, np.random.default_rng(4))
+    assert late < 0.75  # a single-region policy caps at ~0.5 correct routing (+ jitter noise)
+
+
+def test_explore_eps_zero_is_deterministic_per_pull():
+    from canopy.bandits import ContextualUCBRouter
+
+    r = ContextualUCBRouter(3, np.array([0.1, 0.5, 1.0]), n_regions=1, explore_eps=0.0)
+    first = []
+    for _ in range(3):  # select+update cycles try every untried arm once, deterministically
+        arm = r.select(0)
+        first.append(arm)
+        r.update(0, arm, 0.5)
+    assert sorted(first) == [0, 1, 2]

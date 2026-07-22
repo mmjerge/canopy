@@ -107,6 +107,101 @@ def value_guided_search(
     return bool(np.isclose(reward[node], 1.0)), float(reward[node])
 
 
+def value_guided_search_scoped(
+    reward: NDArray[np.float64],
+    depth: int,
+    probes_per_child: int,
+    sigma: float,
+    rng: np.random.Generator,
+    branching: int = 2,
+    probe_informativeness: float = 1.0,
+) -> tuple[bool, float]:
+    """Edge-following descent with a possibly-uninformative cheap probe.
+
+    Like :func:`value_guided_search`, but each child's probe batch is *informative*
+    (rollouts drawn from that child's subtree) only with probability
+    ``probe_informativeness``; otherwise the rollouts are drawn from the whole tree --
+    the same marginal reward distribution but carrying no signal about the child. This
+    models a weak cheap value (e.g. a single public unit test that plausible-but-wrong
+    completions pass): the probe's *value* looks normal, it just fails to track the
+    subtree it is supposed to score. ``probe_informativeness=1`` recovers
+    :func:`value_guided_search` exactly.
+    """
+    if not 0.0 <= probe_informativeness <= 1.0:
+        raise ValueError("probe_informativeness must be in [0, 1]")
+    n = reward.size
+    node = 0
+    for level in range(depth):
+        best_child, best_val = node * branching, -np.inf
+        for j in range(branching):
+            child = node * branching + j
+            start, end = _subtree_range(level + 1, child, depth, branching)
+            if rng.random() < probe_informativeness:
+                idx = rng.integers(start, end, size=probes_per_child)
+            else:
+                idx = rng.integers(0, n, size=probes_per_child)  # no signal about child
+            rollouts = reward[idx]
+            val = float((rollouts + rng.normal(0.0, sigma, size=probes_per_child)).mean())
+            if val > best_val:
+                best_val, best_child = val, child
+        node = best_child
+    return bool(np.isclose(reward[node], 1.0)), float(reward[node])
+
+
+def scoped_success_rate(
+    method: str,
+    depth: int,
+    n_decisions: int,
+    budget: int,
+    sigma: float,
+    saturation: float = 0.0,
+    probe_informativeness: float = 1.0,
+    seeds: int = 200,
+    branching: int = 2,
+) -> float:
+    """Success rate under the two scope knobs that separate the real benchmarks.
+
+    ``saturation`` is the fraction of instances that are *trivial* (every sampled trace
+    is fully correct, so any method succeeds) -- the small-effective-``K``,
+    near-saturated regime (GSM8K, HumanEval/MBPP for a strong model).
+    ``probe_informativeness`` is the probability that a cheap probe batch actually
+    reflects the child it scores -- the informative-value-edge condition (high for
+    execution-graded repo tasks, low for a single public assert). The theory's scope
+    prediction: value-guided beats best-of-N only when saturation is low AND the probe
+    is informative; the gain vanishes as either knob degrades.
+
+    Both methods see the same instance stream (same seeds), so differences are paired.
+    """
+    if not 0.0 <= saturation <= 1.0:
+        raise ValueError("saturation must be in [0, 1]")
+    out = []
+    for s in range(seeds):
+        inst_rng = np.random.default_rng(s)
+        if inst_rng.random() < saturation:
+            out.append(True)  # trivial instance: every trace is correct, either method wins
+            continue
+        reward, _ = reasoning_tree_rewards(
+            depth, n_decisions, branching, rng=np.random.default_rng(1_000_000 + s)
+        )
+        if method == "best_of_n":
+            ok, _ = best_of_n(reward, budget, sigma, np.random.default_rng(10_000 + s))
+        elif method == "value_guided":
+            m = max(1, budget // (depth * branching))
+            ok, _ = value_guided_search_scoped(
+                reward,
+                depth,
+                m,
+                sigma,
+                np.random.default_rng(20_000 + s),
+                branching,
+                probe_informativeness=probe_informativeness,
+            )
+        else:
+            raise ValueError("method must be 'best_of_n' or 'value_guided'")
+        out.append(ok)
+    return float(np.mean(out))
+
+
 def success_rate(
     method: str,
     depth: int,

@@ -28,8 +28,10 @@ from canopy.bandits.prefix_cache import CacheResult, PrefixCacheEnv, offline_opt
 from canopy.bandits.reasoning import (
     best_of_n,
     reasoning_tree_rewards,
+    scoped_success_rate,
     success_rate,
     value_guided_search,
+    value_guided_search_scoped,
 )
 from canopy.bandits.reasoning_llm import (
     Budget,
@@ -109,7 +111,9 @@ __all__ = [
     "reasoning_tree_rewards",
     "best_of_n",
     "value_guided_search",
+    "scoped_success_rate",
     "success_rate",
+    "value_guided_search_scoped",
     "extract_answer",
     "is_correct",
     "Budget",

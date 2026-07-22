@@ -26,19 +26,31 @@ So `B(v) ≤ (log m)/λ + (1/λ) log M_μ(λ) − f(v)`, where `M_μ(λ) = E_L e
 
 **Step 3 — estimate `E exp(λX)` with a one-sided confidence.** With n i.i.d. plays and
 leaf means in `[0,1]` (so `Y_i = exp(λ X_i)` is bounded), an empirical-Bernstein upper
-confidence gives, w.p. ≥ 1 − δ simultaneously over a finite grid Λ,
+confidence gives, w.p. ≥ 1 − δ/(|Λ|+1) for each λ in a finite grid Λ,
 
-    E exp(λX) ≤ Ĝ(λ) + √(2 V̂(λ) ln(2|Λ|/δ) / n) + (7 R_λ ln(2|Λ|/δ)) / (3(n−1)),
+    E exp(λX) ≤ Ĝ(λ) + √(2 V̂(λ) ln(2(|Λ|+1)/δ) / n) + (7 R_λ ln(2(|Λ|+1)/δ)) / (3(n−1)),
 
 where `Ĝ(λ) = (1/n)Σ exp(λX_i)`, `V̂(λ)` is its sample variance, and
 `R_λ = exp(λ·hi) − exp(λ·lo)` is the range of `exp(λX)`.
 
-**Resulting bound.** With probability ≥ 1 − δ,
+**Step 4 — lower-bound the unobserved mean.** `B(v)` subtracts `f(v) = E[X]`, which is
+only estimated by `x̄`; subtracting `x̄` alone under-covers whenever `x̄ > f(v)`
+(probability ≈ ½). So the last δ/(|Λ|+1) budget buys an empirical-Bernstein *lower*
+confidence `f(v) ≥ x̄ − ε_n`, with `ε_n = √(2 V̂_x ln(2(|Λ|+1)/δ)/n) + 7(hi−lo)ln(2(|Λ|+1)/δ)/(3(n−1))`.
 
-    B(v) ≤ min_{λ ∈ Λ} { (1/λ)[ log m + log Ĝ_upper(λ) − λ²σ²/2 ] − x̄ }.
+**Resulting bound.** With probability ≥ 1 − δ (union bound over the |Λ|+1 events),
+
+    B(v) ≤ min_{λ ∈ Λ} { (1/λ)[ log m + log Ĝ_upper(λ) − λ²σ²/2 ] } − (x̄ − ε_n).
 
 This is `mgf_bound` / `mgf_bound_from_moments` in `canopy.bandits.maxmean`. It needs only
-O(|Λ|) running moments per node (`Σ exp(λX_i)`, `Σ exp(2λX_i)`), so it is cheap online.
+O(|Λ|) running moments per node (`Σ exp(λX_i)`, `Σ exp(2λX_i)`, plus the running mean and
+variance of X), so it is cheap online.
+
+**Truncation caveat.** The Bernstein step needs bounded observations; the implementation
+takes the range over `[lo, hi] = [reward_lo − zσ, reward_hi + zσ]` (default z = 3). With
+unbounded Gaussian noise each sample escapes w.p. `2Φ(−z)` (≈ 0.27% at z = 3), so the
+realized coverage is `1 − δ − 2nΦ(−z)`; increase `trunc_z` to shrink the escape term at
+the cost of a wider Bernstein range. The exact unbounded-noise treatment is open (below).
 
 ## Why it is the right object (special cases)
 
