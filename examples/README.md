@@ -73,13 +73,40 @@ uv run --extra bench --extra plot python examples/llm_routing/prompt_optimizatio
 | --- | --- | --- |
 | `reasoning_search_demo.py` | Value-guided (edge-following) descent vs. best-of-N. | `plot` |
 | `agentic_search_demo.py` | Long-horizon agentic search: rollout-guided planning vs. best-of-N. | `plot` |
-| `reasoning_search.py` | **Flagship**: real-LLM value-guided search vs. best-of-N at matched compute, over **MATH** (headline) or **GSM8K** (`--benchmark`); sweeps a budget curve with bootstrap CIs. Resumable; writes to `paper/figures/`; `--mock` for offline. | `llm`, `bench`, AWS |
-| `gsm8k_diagnostic.py` | Matched-budget GSM8K diagnostic (self-consistency vs. oracle value). | `llm`, `bench`, AWS |
+| `probe_scope_demo.py` | Synthetic phase diagram over (saturation × probe informativeness) — reproduces the sign/size of both the real MATH win and the real MBPP null from one model. | `plot` |
+| `reasoning_search.py` | **Flagship**: real-LLM value-guided search vs. best-of-N at matched compute over `--benchmark {math, gsm8k, gpqa, gpqa_diamond, humaneval, mbpp}`; sweeps a budget curve with bootstrap CIs. Resumable; writes to `paper/figures/`; `--mock` for offline. | `llm`, `bench` |
+| `combine_reasoning_models.py` | Capability-ladder sweep: the paired value-guided − best-of-N gain across a model ladder. | `llm`, `bench` |
+| `mbpp_probe_check.py` | Code ladder rung 2: is a continuous multi-test execution probe informative on MBPP, vs. the one-assert null? Reports the Stage-1 gate correlation before any race. | `llm`, `bench` |
+| `swebench_search.py` | Code ladder rung 5: repo-level value-guided search vs. best-of-N on real SWE-bench issues, graded in Docker. `--mock` for offline. | `llm`, Docker + `swebench` |
+| `run_swebench_sweep.sh` | Five-model × three-depth SWE-bench capability sweep (long-running; run in `tmux`, resumable). | same as above |
+| `terminalbench_search.py` | Code ladder rung 6: the same value-guided machinery on Terminal-Bench 2.x via Harbor, graded in a fresh container. `--mock` for offline. | separate Python 3.12 Harbor venv |
+| `gsm8k_diagnostic.py` | Matched-budget GSM8K diagnostic (self-consistency vs. oracle value). | `llm`, `bench` |
+
+See `examples/analysis/` below for the accompanying tree-Lipschitz characterizations
+(rung 3–4 of the code ladder) and `docs/code_benchmarks.md` for the full ladder writeup.
 
 ```bash
 uv run --extra plot python examples/reasoning/reasoning_search_demo.py
 uv run --extra plot python examples/reasoning/agentic_search_demo.py
-uv run --extra llm --extra bench python examples/reasoning/reasoning_search.py --benchmark math --resume  # real Bedrock
+uv run --extra plot python examples/reasoning/probe_scope_demo.py
+uv run --extra llm --extra bench python examples/reasoning/reasoning_search.py --benchmark math --mock  # try --mock first
+python examples/reasoning/swebench_search.py --mock --n-instances 12
+python examples/reasoning/terminalbench_search.py --mock --n-tasks 12
+```
+
+## analysis — measuring the prior directly on real data
+
+| Demo | What it shows | Needs |
+| --- | --- | --- |
+| `theory_link.py` | Sublinear-regret exponent on a synthetic tree-Lipschitz function, and a variance decomposition of the real RouterBench value function by tree resolution. | `bench`, `plot` |
+| `reasoning_tree_lipschitz.py` | Is the reasoning value function almost tree-$K$-Lipschitz on real MATH/GPQA traces? Cheap-vs-true node-value correlation + pivotal-step count. | `llm`, `bench` |
+| `swebench_stage1.py` | Code ladder rung 3: offline BM25 localization gate on SWE-bench Lite — no API calls, no Docker. | `bench` |
+| `swebench_tree_lipschitz.py` | Code ladder rung 4: the same characterization as above, directly on generated *patches* rather than file retrieval. `--mock` for offline. Reuses `swebench_search.py`'s response cache. | `llm`, Docker + `swebench` |
+
+```bash
+uv run --extra bench --extra plot python examples/analysis/theory_link.py
+python examples/analysis/swebench_stage1.py                       # already measured; free to rerun
+python examples/analysis/swebench_tree_lipschitz.py --mock --n-instances 12
 ```
 
 ## agentic — long-horizon real-benchmark search and routing
@@ -100,10 +127,12 @@ python examples/agentic/alfworld_search.py --mock --num-tasks 12
 | Demo | What it shows | Needs |
 | --- | --- | --- |
 | `systems/vllm_prefix_cache_eval.py` | Real vLLM serving with prefix caching ON vs OFF: TTFT, throughput, hit rate, KV memory on a shared-prefix workload (+ optional popularity `--shift`). Writes to `paper/figures/`; `--dry-run` for offline. | `vllm`, NVIDIA GPU |
+| `systems/vllm_policy_eval.py` | GPU-calibrated eviction policy comparison: measures real per-token prefill savings, then replays adaptive/LRU/LFU/offline over a real shared-prefix workload with a popularity shift. `--dry-run` for offline. | `vllm`, NVIDIA GPU |
 
 ```bash
 python examples/systems/vllm_prefix_cache_eval.py --dry-run          # validate harness, no GPU
 python examples/systems/vllm_prefix_cache_eval.py --model Qwen/Qwen2.5-7B-Instruct --shift  # on a GPU
+python examples/systems/vllm_policy_eval.py --dry-run
 ```
 See `examples/systems/README.md` for the full runbook and the Tier-2 (in-engine adaptive policy) sketch.
 
