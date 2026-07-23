@@ -57,6 +57,9 @@ LABELS = {
 }
 
 
+MIXTURE = "--mixture" in sys.argv  # route internal probes through the spec-faithful mixture channel
+
+
 def make_env(seed: int, probe_cost: float) -> TreeBandit:
     return TreeBandit.from_hierarchical_gaussian(
         BRANCHING,
@@ -64,6 +67,7 @@ def make_env(seed: int, probe_cost: float) -> TreeBandit:
         sigma=SIGMA,
         noise_std=0.1,
         probe_cost=probe_cost,
+        mixture_probes=MIXTURE,
         rng=np.random.default_rng(seed),
     )
 
@@ -127,7 +131,7 @@ def main() -> None:
     fidelity_panel(axes[0])
     cost_budget_panel(axes[1])
     fig.tight_layout()
-    out = save_figure(fig, "tree_topk_benchmark")
+    out = save_figure(fig, "tree_topk_benchmark_mixture" if MIXTURE else "tree_topk_benchmark")
     print(f"\nsaved chart to {out} (+ .png)")
 
 

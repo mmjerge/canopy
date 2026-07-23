@@ -74,6 +74,7 @@ class TreeBandit:
         leaf_cost: float = 1.0,
         probe_cost: float = 0.1,
         probe_noise_std: float | None = None,
+        mixture_probes: bool = False,
         rng: np.random.Generator | None = None,
     ) -> None:
         if branching < 2:
@@ -83,6 +84,11 @@ class TreeBandit:
         if leaf_cost <= 0 or probe_cost <= 0:
             raise ValueError("leaf_cost and probe_cost must be > 0")
         self.branching = branching
+        # If True, an internal probe returns mu(random leaf)+noise (the mixture channel of
+        # paper Eq. 5) instead of the exact subtree average f(v)+noise: same mean, but the
+        # extra within-subtree variance makes it the spec-faithful (and noisier) probe. Used
+        # to check the top-k results are robust to the probe channel (closes review item C1).
+        self.mixture_probes = bool(mixture_probes)
         self.depth = depth
         self.noise_std = float(noise_std)
         self.probe_noise_std = (
@@ -117,6 +123,7 @@ class TreeBandit:
         leaf_cost: float = 1.0,
         probe_cost: float = 0.1,
         probe_noise_std: float | None = None,
+        mixture_probes: bool = False,
         rng: np.random.Generator | None = None,
     ) -> "TreeBandit":
         """Build a tree whose leaf means come from a hierarchical Gaussian diffusion.
@@ -138,6 +145,7 @@ class TreeBandit:
             leaf_cost=leaf_cost,
             probe_cost=probe_cost,
             probe_noise_std=probe_noise_std,
+            mixture_probes=mixture_probes,
             rng=rng,
         )
 
@@ -283,4 +291,9 @@ class TreeBandit:
         """
         self.n_pulls += 1
         self.total_cost += self.cost(node)
+        if self.mixture_probes and not self.is_leaf(node):
+            # spec-faithful mixture channel: observe a uniformly random leaf under the node
+            start, end = self.leaf_range(node)
+            leaf_idx = int(self.rng.integers(start, end))
+            return float(self._leaf_means[leaf_idx]) + self.rng.normal(0.0, self.noise_for(node))
         return self.true_value(node) + self.rng.normal(0.0, self.noise_for(node))
