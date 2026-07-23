@@ -29,7 +29,8 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # examples/ (for _plotstyle)
+sys.path.insert(0, str(Path(__file__).resolve().parents[0]))  # examples/llm_routing/ (siblings)
 from _plotstyle import FIGURE_DIR, PALETTE, progress, save_figure, set_style  # noqa: E402
 from prompt_optimization import LAMBDAS, _sweep_lambda  # noqa: E402  reuse the frontier sweep
 
