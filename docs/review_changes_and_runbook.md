@@ -29,9 +29,23 @@ proof asserted each jump cell is visited `O(1/Delta^2)` times with "bounded aggr
 regret." Standard UCB accounting gives `O(log n / Delta_v^2)` visits at per-visit
 regret `Delta_v`, i.e. `O(log n / Delta_v)` per cell — both the `log n` factor and
 the inverse-gap dependence were dropped without justification.
+
+The `log n` is not an external factor introduced by the fix — it is already in the
+engine's own optimism index (`eq:index`, §3.2): `U(v) = mu_hat(v) + c*sqrt(2 ln t /
+T(v)) + spread(l)`. That confidence radius uses the *current round* `t` (a standard
+anytime-UCB index, same family as UCB1). For a jump cell with gap `Delta_v`, that index
+separates it from the best cell only once `T(v) >= O(log t / Delta_v^2)` — bounding `t`
+by the horizon `n` and multiplying by the `<= 1` per-play regret gives an aggregate
+contribution of `O(log n / Delta_v)` per cell, exactly the standard finite-armed UCB
+regret decomposition (Lattimore & Szepesvari, *Bandit Algorithms*, Thm. 7.2) applied
+per jump-cell instead of per-arm.
+
 **Fix:** the statement now reads `... + C2 K D log(n) / Delta_min` and the proof
 carries the terms explicitly. The qualitative story survives (the jump penalty grows
-only logarithmically, so it never changes the polynomial rate).
+only logarithmically, so it never changes the polynomial rate) — only the literal
+"horizon-independent constant" claim was false; it silently dropped the log factor
+already present in the algorithm's own index. Full derivation:
+`docs/experimentation_plan.md` §1.
 
 ### T3 — Theorem 2's detection step assumed away detectability *(fixed)*
 The proof claimed the detector flags *all* violations and *no* smooth cells "by

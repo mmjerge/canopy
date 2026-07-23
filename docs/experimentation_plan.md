@@ -25,6 +25,64 @@ The review found five issues in the theorems and six in the code/experiments.
 | Truncation caveat | Bounded-range step under unbounded Gaussian noise had an undocumented escape probability | Documented |
 | Manuscript defects | Garbled equation, ~8 broken citations, a table caption over the wrong columns | Fixed |
 
+### Why each fix was needed
+
+The table above is a status log, not a derivation — each row compresses to one line for
+scanability. Below is the actual "why" for the three non-cosmetic fixes, self-contained,
+referencing the paper's own equation/theorem labels (`paper/sections/theory.tex`).
+
+**Theorem 1 (certificate), `thm:certificate`.** The bound is on
+`B(v) = max_x μ(x) − f(v)`. The algorithm never observes `f(v)` directly — it only has
+`X̄`, the empirical mean of probes, which *estimates* `f(v)` with its own sampling error.
+The original statement subtracted `X̄` directly with no confidence adjustment. Since `X̄`
+is just a sample mean, `X̄ > f(v)` on roughly half of all draws — and on exactly that
+event, the claimed bound is not valid at the stated `1 − δ`; it under-covers. The fix
+spends one slice of `δ` on an empirical-Bernstein *lower* confidence bound on `f(v)`
+itself (`f(v) ≥ X̄ − ε_n`) and subtracts `X̄ − ε_n` instead. This is now checked directly
+by a calibration test (400 independent trials, 0 violations at δ = 0.1).
+
+**Theorem 2 (detection), `ass:detectability`.** The original proof asserted that "setting
+the confidence level appropriately" makes the detector flag every true violation and no
+smooth cell. A one-sided confidence bound genuinely controls the *false-positive* side
+(a truly smooth cell won't get flagged, w.h.p.) — but it does **not** automatically
+guarantee catching every *true* violation. If a jump's within-cell spread is only
+marginally above the smooth threshold, it can hide inside the noise at the sample size
+used and never separate from the null. Catching every true violation requires an
+explicit minimum-margin condition (the jump's spread must exceed the threshold by some
+factor `γ > 1`, stated at the detection sample size) — that's the new Assumption 1. This
+isn't a new requirement invented after the fact; it was implicitly needed all along and
+just wasn't written down.
+
+**Theorem 3 (regret), `thm:regret`, `eq:regret-bound`.** This is the one that prompted
+the question. The original claim was `R_n ≤ C₁n^{(d+1)/(d+2)} + C₂KD` — a
+*horizon-independent* additive constant for the jump-cell penalty. Where the `log n`
+actually comes from: it's already sitting in the algorithm's own optimism index,
+`eq:index` —
+```
+U(v) = μ̂(v) + c·√(2 ln t / T(v)) + spread(ℓ)
+```
+That confidence radius uses the *current round* `t` (a standard anytime-UCB index, same
+family as UCB1) — the `ln t` isn't something introduced by the fix, it's in the
+algorithm being analyzed. For a jump cell `v` with sub-optimality gap `Δ_v`:
+1. The cell stops being played once its radius shrinks below (roughly) `Δ_v`: solving
+   `c·√(2 ln t / T) ≈ Δ_v` gives `T(v) ≈ O(log t / Δ_v²)` plays before *the algorithm's
+   own index* separates it from the best cell.
+2. Bounding `t` by the horizon `n`: `O(log n / Δ_v²)` plays total.
+3. Each play costs ≤ 1 regret (jump height ≤ 1), so that cell's aggregate regret
+   contribution is `(plays) × (per-play regret) ≈ O(log n/Δ_v²) × Δ_v = O(log n/Δ_v)`.
+4. Summing over the `O(KD)` jump cells and bounding each `1/Δ_v` by `1/Δ_min` (the
+   smallest gap) gives the stated `O(KD·log n/Δ_min)`.
+
+This is exactly the standard finite-armed UCB regret decomposition (Lattimore &
+Szepesvári, *Bandit Algorithms*, Thm. 7.2: `R_n ≤ Σᵢ[8 ln n/Δᵢ + O(Δᵢ)]`), applied
+per-jump-cell instead of per-arm — not a novel argument, and not something that can be
+avoided while the algorithm uses this particular anytime index. It does **not** change
+the paper's qualitative conclusion: `log n` is asymptotically dominated by the leading
+`n^{(d+1)/(d+2)}` term regardless, so *K* jumps still don't change the polynomial rate —
+only the literal claim of a horizon-independent constant was false, and the fix makes
+the true (slightly weaker, still asymptotically negligible) statement explicit instead
+of silently dropping the log factor.
+
 ### Code / experiments
 
 Five of six are fixed, disclosed, or superseded by independent work already on `main`.
