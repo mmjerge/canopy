@@ -44,12 +44,14 @@ BEAM = 20
 
 COLORS = {
     "Hierarchical": PALETTE["blue"],
+    "HierarchicalSound": PALETTE["sky"],
     "SuccessiveElim": PALETTE["green"],
     "Uniform": PALETTE["red"],
 }
-MARKERS = {"Hierarchical": "o", "SuccessiveElim": "^", "Uniform": "s"}
+MARKERS = {"Hierarchical": "o", "HierarchicalSound": "D", "SuccessiveElim": "^", "Uniform": "s"}
 LABELS = {
-    "Hierarchical": "Hierarchical (ours)",
+    "Hierarchical": "Hierarchical, beam (ours)",
+    "HierarchicalSound": "Hierarchical, sound (analyzed)",
     "SuccessiveElim": "Successive elimination",
     "Uniform": "Uniform",
 }
@@ -73,6 +75,9 @@ def recall_samples(method: str, budget: float, probe_cost: float) -> np.ndarray:
         env = make_env(seed, probe_cost)
         if method == "Hierarchical":
             res = HierarchicalTopK(budget=budget, spread=SPREAD, beam_width=BEAM).run(env, K)
+        elif method == "HierarchicalSound":
+            # the sound algorithm Theorem 2 analyzes: no beam focusing (worst-case valid pruning)
+            res = HierarchicalTopK(budget=budget, spread=SPREAD, beam_width=None).run(env, K)
         elif method == "SuccessiveElim":
             res = SuccessiveEliminationTopK(budget=budget).run(env, K)
         else:
@@ -85,7 +90,7 @@ def fidelity_panel(ax) -> None:
     budget = 1500.0
     ratios = [1.0, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01]
     print(f"\n[fidelity sweep @ budget={budget}]  probe/leaf cost -> mean recall")
-    for method in ("Hierarchical", "SuccessiveElim"):
+    for method in ("Hierarchical", "HierarchicalSound", "SuccessiveElim"):
         samples = np.array([recall_samples(method, budget, r)
                             for r in progress(ratios, f"fidelity {method}")])
         ci_band(ax, ratios, samples, COLORS[method], LABELS[method], MARKERS[method])
@@ -103,7 +108,7 @@ def cost_budget_panel(ax) -> None:
     probe_cost = 0.05
     budgets = [400, 800, 1500, 3000, 6000, 12000]
     print(f"\n[cost-budget sweep @ probe_cost={probe_cost}]  budget -> mean recall")
-    for method in ("Hierarchical", "SuccessiveElim", "Uniform"):
+    for method in ("Hierarchical", "HierarchicalSound", "SuccessiveElim", "Uniform"):
         samples = np.array([recall_samples(method, b, probe_cost)
                             for b in progress(budgets, f"budget {method}")])
         ci_band(ax, budgets, samples, COLORS[method], LABELS[method], MARKERS[method])
