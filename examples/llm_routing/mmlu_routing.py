@@ -159,6 +159,12 @@ def main() -> None:
         "response cache, so already-seen model/prompt pairs stay free)",
     )
     ap.add_argument(
+        "--bernoulli",
+        action="store_true",
+        help="replay noise model: observe Bernoulli(q) per routed query (faithful for a 0/1 "
+             "accuracy matrix) instead of q + Gaussian noise; outputs get a _bernoulli tag",
+    )
+    ap.add_argument(
         "--trials",
         type=int,
         default=20,
@@ -279,7 +285,8 @@ def main() -> None:
         label = strat
         for s in range(n_trials):
             env = PrefixTreeRouting(
-                2, 5, quality, rel_costs, lam=0.3, noise_std=0.05, rng=np.random.default_rng(s)
+                2, 5, quality, rel_costs, lam=0.3, noise_std=0.05,
+                bernoulli=args.bernoulli, rng=np.random.default_rng(s)
             )
             r = run_router(env, horizon, np.random.default_rng(1000 + s), strategy=strat, **kw)
             label = r.label
@@ -293,8 +300,9 @@ def main() -> None:
               f"avg_quality={a['avg_quality']:.3f}±{a['avg_quality_ci']:.3f}  "
               f"rel_cost/q={a['cost']:.3f}±{a['cost_ci']:.3f}")
 
-    _write_tables(models, quality, costs, results)
-    _plot(results, quality)
+    tag = "_bernoulli" if args.bernoulli else ""
+    _write_tables(models, quality, costs, results, tag=tag)
+    _plot(results, quality, tag=tag)
 
 
 def _ci95(x: np.ndarray) -> float:
@@ -320,7 +328,8 @@ def _latex_escape(s: str) -> str:
     return s.replace("_", r"\_")
 
 
-def _write_tables(models: list[str], quality: np.ndarray, costs: np.ndarray, results: dict) -> None:
+def _write_tables(models: list[str], quality: np.ndarray, costs: np.ndarray, results: dict,
+                  tag: str = "") -> None:
     """Write LaTeX tables (per-model measurements + routing comparison) and echo to console."""
     import sys
 
@@ -375,12 +384,12 @@ def _write_tables(models: list[str], quality: np.ndarray, costs: np.ndarray, res
         + "\n".join(strat_rows)
         + "\n\\bottomrule\n\\end{tabular}\n"
     )
-    (tdir / "mmlu_routing_table.tex").write_text(strat_tex)
+    (tdir / f"mmlu_routing{tag}_table.tex").write_text(strat_tex)
     print(f"\nwrote LaTeX tables to {tdir}/mmlu_models_table.tex and mmlu_routing_table.tex "
           f"({n_trials} seeds, 95% CI)")
 
 
-def _plot(results: dict, quality: np.ndarray) -> None:
+def _plot(results: dict, quality: np.ndarray, tag: str = "") -> None:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -425,7 +434,7 @@ def _plot(results: dict, quality: np.ndarray) -> None:
         f"{quality.shape[0]} Bedrock models, {n_trials} seeds)"
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    out = save_figure(fig, "mmlu_routing")
+    out = save_figure(fig, f"mmlu_routing{tag}")
     print(f"\nsaved chart to {out} (+ .png)")
 
 

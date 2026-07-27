@@ -50,7 +50,11 @@ class PrefixTreeRouting:
         quality: Array ``(n_models, n_leaves)`` of true per-model leaf qualities in [0, 1].
         costs: Per-model query cost, length ``n_models``.
         lam: Cost weight in the net utility ``q - lam * cost``.
-        noise_std: Observation noise on a routed query's quality.
+        noise_std: Observation noise on a routed query's quality (Gaussian mode).
+        bernoulli: If True, an observation is a Bernoulli(q) draw instead of q + Gaussian
+            noise --- the faithful replay model when ``quality`` entries are per-question
+            0/1 accuracy means (e.g. a replayed MMLU matrix), where the learner sees a
+            single correct/incorrect outcome per routed query. ``noise_std`` is ignored.
         rng: Optional generator.
     """
 
@@ -62,6 +66,7 @@ class PrefixTreeRouting:
         costs: NDArray[np.float64],
         lam: float = 0.3,
         noise_std: float = 0.1,
+        bernoulli: bool = False,
         rng: np.random.Generator | None = None,
     ) -> None:
         if branching < 2 or depth < 1:
@@ -76,6 +81,7 @@ class PrefixTreeRouting:
         self.costs = np.asarray(costs, dtype=np.float64)
         self.lam = float(lam)
         self.noise_std = float(noise_std)
+        self.bernoulli = bool(bernoulli)
         self.rng = rng or np.random.default_rng()
 
         # net utility u_m(leaf) and the per-prompt oracle (best model per leaf)
@@ -91,7 +97,10 @@ class PrefixTreeRouting:
         return int(self.rng.integers(0, self.n_leaves))
 
     def observe_quality(self, model: int, leaf: int) -> float:
-        return float(self.quality[model, leaf] + self.rng.normal(0.0, self.noise_std))
+        q = self.quality[model, leaf]
+        if self.bernoulli:
+            return float(self.rng.random() < q)  # one correct/incorrect outcome per query
+        return float(q + self.rng.normal(0.0, self.noise_std))
 
 
 def make_routing_scenario(
