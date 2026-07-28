@@ -31,7 +31,7 @@ openai = [
     "openai>=1.0",
 ]
 anthropic = [
-    "anthropic>=0.39",
+    "anthropic>=0.120.1",
 ]
 bench = [
     "boto3>=1.34",
