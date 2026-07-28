@@ -19,6 +19,7 @@ dev = [
     "flake8>=7.3.0",
     "mypy>=1.11",
     "pre-commit>=4.6.0",
+    "sympy==1.14.0",  # mechanical verification of the certificate algebra
 ]
 plot = [
     "matplotlib>=3.10",
