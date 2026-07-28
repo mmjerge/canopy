@@ -14,10 +14,12 @@ state cloning (which is what sank the ALFWorld agentic attempt).
 Both select on the same public signal (fraction of tests passing); only the final choice is graded
 for full resolution. Per-task 0/1 resolution is recorded for paired bootstrap CIs.
 
-Runs in the Python 3.12 harbor venv on the box (Harbor requires >=3.12):
+Runs in the Python 3.12 harbor venv on the box (Harbor requires >=3.12), against a local
+terminal-bench 2.x tasks directory (git clone of github.com/harbor-framework/terminal-bench-2-1):
     ~/harbor-venv/bin/python examples/reasoning/terminalbench_search.py \
-        --dataset terminal-bench/terminal-bench-2 --dataset-version 2.0.0 --n-tasks 20 \
-        --model bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0 --branching 3 --depth 1 --resume
+        --tasks-dir examples/.cache/terminalbench/tb21/tasks --n-tasks 20 \
+        --model bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0 \
+        --branching 3 --depth 1 --resume
 
 Smoke-test the whole pipeline (search, feedback, matched budget, resume, table) with no Harbor:
     python examples/reasoning/terminalbench_search.py --mock --n-tasks 12
@@ -214,8 +216,8 @@ def load_mock_tasks(n: int):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dataset", default="terminal-bench/terminal-bench-2")
-    ap.add_argument("--dataset-version", default="2.0.0")
+    ap.add_argument("--tasks-dir", default="examples/.cache/terminalbench/tb21/tasks",
+                    help="local tasks directory (a terminal-bench 2.x git clone's tasks/)")
     ap.add_argument("--n-tasks", type=int, default=20)
     ap.add_argument("--model", default="bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0")
     ap.add_argument("--region", default="us-east-1")
@@ -228,7 +230,8 @@ def main() -> None:
     ap.add_argument("--tag", default="terminalbench")
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--resume", action="store_true")
-    ap.add_argument("--mock", action="store_true", help="deterministic mock model+grader, no Harbor")
+    ap.add_argument("--mock", action="store_true",
+                    help="deterministic mock model+grader, no Harbor")
     args = ap.parse_args()
 
     if args.mock:
@@ -252,17 +255,18 @@ def main() -> None:
             # model label may be prefixed 'bedrock/'; BedrockClient wants the bare id
             gen_model = args.model.split("bedrock/")[-1]
             generate = as_generate_fn(client, gen_model, temperature=0.7)
-            tasks = load_terminalbench_tasks(args.n_tasks, args.dataset, args.dataset_version)
+            tasks = load_terminalbench_tasks(args.n_tasks, args.tasks_dir)
             if not tasks:
-                print("No tasks loaded -- confirm the harbor dataset API / --dataset(-version). "
-                      "See load_terminalbench_tasks INTEGRATION NOTE.")
+                print(f"No tasks found under {args.tasks_dir} -- clone a terminal-bench 2.x "
+                      "repo there, e.g.\n  git clone --depth 1 "
+                      "https://github.com/harbor-framework/terminal-bench-2-1 "
+                      "examples/.cache/terminalbench/tb21")
                 return
 
             def grader(task, scripts, tag="c"):
                 return grade_candidates(
-                    task, scripts, dataset=args.dataset, dataset_version=args.dataset_version,
-                    jobs_dir=args.jobs_dir, harbor_bin=args.harbor_bin, timeout=args.timeout,
-                    tag=tag,
+                    task, scripts, jobs_dir=args.jobs_dir, harbor_bin=args.harbor_bin,
+                    timeout=args.timeout, tag=tag,
                 )
 
             model_label = args.model
@@ -281,15 +285,17 @@ def main() -> None:
         if per_task:
             print(f"resume: {len(per_task)} tasks already graded; continuing")
 
-    def checkpoint(pt):
-        write_checkpoint(pt, budget, model_label, args.dataset, args.tag)
+    dataset_label = "mock" if args.mock else str(args.tasks_dir)
 
-    print(f"Terminal-Bench search: {len(tasks)} tasks, dataset {args.dataset}=={args.dataset_version}, "
+    def checkpoint(pt):
+        write_checkpoint(pt, budget, model_label, dataset_label, args.tag)
+
+    print(f"Terminal-Bench search: {len(tasks)} tasks from {dataset_label}, "
           f"model {model_label}, budget B*(D+1)={budget}")
     start = time.monotonic()
     run_level(tasks, generate, grader, args.branching, args.depth, args.max_tokens,
               per_task, checkpoint)
-    _write_outputs(per_task, budget, model_label, args.dataset, tag=args.tag)
+    _write_outputs(per_task, budget, model_label, dataset_label, tag=args.tag)
     print(f"  ({(time.monotonic() - start) / 60:.1f}m elapsed)")
 
 

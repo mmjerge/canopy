@@ -27,7 +27,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 _FENCE = re.compile(r"```(?:bash|sh|shell)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
@@ -63,22 +62,25 @@ def extract_script(text: str) -> str:
     return text.strip() + "\n" if text.strip() else ""
 
 
-def run_harbor(task_id: str, script: str, *, dataset: str, dataset_version: str, jobs_dir: str,
-               harbor_bin: str = "harbor", timeout: int = 1800, extra_args: list | None = None) -> None:
-    """Run one candidate script in a fresh Harbor container for ``task_id`` via CanopyScriptAgent.
+def run_harbor(task_path: str, script: str, *, jobs_dir: str, harbor_bin: str = "harbor",
+               timeout: int = 1800, extra_args: list | None = None) -> None:
+    """Run one candidate script in a fresh Harbor container for the task at ``task_path``.
 
-    The script is passed base64-encoded in the environment; Harbor builds the task container, the
-    agent decodes+runs it, and the verifier grades it, writing results under ``jobs_dir``.
+    Validated against harbor 0.18 on the box: a single local task runs via ``harbor run -p
+    <task_dir>`` (no registry needed); results land under ``jobs_dir/<timestamp>/<trial>/`` with
+    ``verifier/ctrf.json`` (per-test outcomes) and ``verifier/reward.txt`` (0/1 resolution). The
+    candidate script is passed base64-encoded in the environment; the CanopyScriptAgent decodes
+    and executes it inside the container, then the task's verifier grades the state.
     """
     env = dict(os.environ)
     env[_SOLUTION_ENV] = base64.b64encode(script.encode()).decode()
     cmd = [
         harbor_bin, "run",
-        "-d", f"{dataset}=={dataset_version}" if dataset_version else dataset,
+        "-p", str(task_path),
         "-a", AGENT_IMPORT,
-        "--task-id", task_id,          # <-- verify flag name for single-task selection on the box
+        "--ae", f"{_SOLUTION_ENV}={env[_SOLUTION_ENV]}",  # pass through to the agent phase
         "-k", "1",
-        "-o", jobs_dir,
+        "-o", str(jobs_dir),
         "-y", "--quiet",
     ]
     if extra_args:
@@ -86,10 +88,13 @@ def run_harbor(task_id: str, script: str, *, dataset: str, dataset_version: str,
     subprocess.run(cmd, env=env, timeout=timeout, check=False)
 
 
-def _find_result_json(jobs_dir: Path, task_id: str) -> Path | None:
-    """Newest results JSON for ``task_id`` under a Harbor jobs directory (layout may vary)."""
-    cands = list(jobs_dir.rglob("*result*.json")) + list(jobs_dir.rglob("results.json"))
-    cands = [p for p in cands if task_id in str(p) or task_id in p.read_text(errors="ignore")[:2000]]
+def _find_verifier_dir(jobs_dir: Path) -> Path | None:
+    """Newest ``verifier/`` directory under a Harbor jobs dir (one trial per invocation).
+
+    Verified layout (harbor 0.18): ``jobs_dir/<timestamp>/<task>__<id>/verifier/`` containing
+    ``ctrf.json`` (per-test outcomes) and ``reward.txt`` ("1" iff the task is resolved).
+    """
+    cands = [p for p in jobs_dir.rglob("verifier") if p.is_dir()]
     return max(cands, key=lambda p: p.stat().st_mtime) if cands else None
 
 
@@ -134,18 +139,38 @@ def _test_passed(t: dict) -> bool:
 
 
 def parse_results(jobs_dir: str | Path, task_id: str) -> dict:
-    """Read Harbor verifier results for ``task_id`` into {resolved, tests_pass, tests_total}."""
+    """Read Harbor verifier results into {resolved, tests_pass, tests_total}.
+
+    Primary source: the trial's ``verifier/ctrf.json`` summary (pytest CTRF: tests/passed) plus
+    ``verifier/reward.txt`` (the official 0/1 resolution). Falls back to the generic result-JSON
+    walker if the layout differs.
+    """
     out = {"resolved": False, "tests_pass": 0, "tests_total": 0}
-    p = _find_result_json(Path(jobs_dir), task_id)
-    if p is None:
+    vd = _find_verifier_dir(Path(jobs_dir))
+    if vd is not None:
+        try:
+            ctrf = json.loads((vd / "ctrf.json").read_text())
+            summary = ctrf.get("results", {}).get("summary", {})
+            out["tests_total"] = int(summary.get("tests", 0))
+            out["tests_pass"] = int(summary.get("passed", 0))
+        except Exception:  # noqa: BLE001 -- verifier may have crashed before writing ctrf
+            pass
+        try:
+            out["resolved"] = (vd / "reward.txt").read_text().strip() == "1"
+        except Exception:  # noqa: BLE001
+            out["resolved"] = out["tests_total"] > 0 and out["tests_pass"] == out["tests_total"]
         return out
-    try:
-        obj = json.loads(p.read_text())
-    except Exception:  # noqa: BLE001
-        return out
-    npass, total, resolved = _count_tests(obj)
-    out.update(tests_pass=npass, tests_total=total,
-               resolved=bool(resolved) if resolved is not None else False)
+    # fallback: any result JSON with a recognizable shape
+    cands = list(Path(jobs_dir).rglob("result*.json"))
+    for p in sorted(cands, key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            obj = json.loads(p.read_text())
+        except Exception:  # noqa: BLE001
+            continue
+        npass, total, resolved = _count_tests(obj)
+        if resolved is not None:
+            out.update(tests_pass=npass, tests_total=total, resolved=bool(resolved))
+            break
     return out
 
 
@@ -172,16 +197,18 @@ def test_feedback(outcome: dict) -> str:
     return f"{nfail} of {total} tests still fail after your script. Reconsider the approach."
 
 
-def grade_candidates(task: dict, scripts: list[str], *, dataset: str, dataset_version: str,
-                     jobs_dir: str | Path, harbor_bin: str = "harbor", timeout: int = 1800,
+def grade_candidates(task: dict, scripts: list[str], *, jobs_dir: str | Path,
+                     harbor_bin: str = "harbor", timeout: int = 1800,
                      tag: str = "c") -> list[dict]:
     """Grade several candidate scripts for ONE task, each in its own fresh Harbor container.
 
     Unlike SWE-bench (where one harness run graded many predictions), Harbor grades one agent run
-    per container, so we invoke ``harbor run`` once per non-empty script. Returns one outcome dict
-    per input script, in order. Empty scripts grade as non-resolving without invoking Harbor.
+    per container, so we invoke ``harbor run -p <task_path>`` once per non-empty script. Returns
+    one outcome dict per input script, in order. Empty scripts grade as non-resolving without
+    invoking Harbor.
     """
     task_id = task["task_id"]
+    task_path = task["task_path"]
     jd = Path(jobs_dir)
     outcomes: list[dict] = [{"resolved": False, "tests_pass": 0, "tests_total": 0} for _ in scripts]
     for k, script in enumerate(scripts):
@@ -189,14 +216,14 @@ def grade_candidates(task: dict, scripts: list[str], *, dataset: str, dataset_ve
             continue
         cell_dir = jd / f"{task_id}_{tag}_cand{k}"
         cell_dir.mkdir(parents=True, exist_ok=True)
-        run_harbor(task_id, script, dataset=dataset, dataset_version=dataset_version,
-                   jobs_dir=str(cell_dir), harbor_bin=harbor_bin, timeout=timeout)
+        run_harbor(task_path, script, jobs_dir=str(cell_dir), harbor_bin=harbor_bin,
+                   timeout=timeout)
         outcomes[k] = parse_results(cell_dir, task_id)
     return outcomes
 
 
 class MockGrader:
-    """Deterministic no-Harbor grader for pipeline smoke tests (mirrors swebench_eval.MockGrader)."""
+    """Deterministic no-Harbor grader for smoke tests (mirrors swebench_eval.MockGrader)."""
 
     def __init__(self, seed: int = 0, n_tests: int = 4):
         self.seed = seed
@@ -220,20 +247,22 @@ class MockGrader:
         return out
 
 
-def load_terminalbench_tasks(n: int, dataset: str, dataset_version: str) -> list[dict]:
-    """Load up to ``n`` Terminal-Bench tasks as {task_id, instruction} dicts.
+def load_terminalbench_tasks(n: int, tasks_dir: str | Path) -> list[dict]:
+    """Load up to ``n`` Terminal-Bench tasks from a local tasks directory.
 
-    INTEGRATION NOTE: task enumeration + instruction access is via harbor's registry; the exact
-    API is confirmed on the box. This best-effort loader tries the harbor dataset API and falls
-    back to listing task dirs. Validate before the real pilot.
+    Validated layout (terminal-bench-2.x git repo, e.g. github.com/harbor-framework/
+    terminal-bench-2-1): ``tasks/<task-name>/`` each containing ``instruction.md``, ``task.toml``,
+    ``environment/`` and ``tests/``. Returns ``{task_id, task_path, instruction}`` dicts, sorted
+    by task name for a deterministic subset.
     """
-    try:
-        from harbor.registry.datasets import get_dataset  # type: ignore
-
-        ds = get_dataset(dataset, dataset_version)
-        tasks = []
-        for t in list(ds.tasks)[:n]:  # type: ignore[attr-defined]
-            tasks.append({"task_id": t.id, "instruction": t.instruction})
-        return tasks
-    except Exception:  # noqa: BLE001 -- API differs by version; resolved during box validation
-        return []
+    root = Path(tasks_dir)
+    tasks: list[dict] = []
+    for d in sorted(root.iterdir()):
+        if len(tasks) >= n:
+            break
+        instr = d / "instruction.md"
+        if not d.is_dir() or not instr.exists():
+            continue
+        tasks.append({"task_id": d.name, "task_path": str(d),
+                      "instruction": instr.read_text(errors="replace")})
+    return tasks
