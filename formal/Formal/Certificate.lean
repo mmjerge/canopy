@@ -97,3 +97,55 @@ theorem subgaussian_rate_le (m sw lam : ℝ) (hm : 1 < m) (hlam : 0 < lam) :
   positivity
 
 end Canopy
+
+namespace Canopy
+
+open MeasureTheory ProbabilityTheory
+
+/-- **Step (ii) of Theorem 1 (noise deconvolution), as real probability.**
+If the probe is `X = M + N` with `M` (the leaf-mean draw) independent of `N`, and `N` is
+Gaussian with mean `0` and variance `v`, then the probe MGF factors:
+`mgf (M + N) lam = mgf M lam * exp (v * lam^2 / 2)`. -/
+theorem mgf_deconvolution {Ω : Type*} [MeasurableSpace Ω] {p : MeasureTheory.Measure Ω}
+    [IsProbabilityMeasure p] (M N : Ω → ℝ) (v : NNReal) (lam : ℝ)
+    (h_indep : IndepFun M N p) (hM : AEStronglyMeasurable M p)
+    (hN : AEStronglyMeasurable N p) (hlaw : p.map N = gaussianReal 0 v) :
+    mgf (M + N) p lam = mgf M p lam * Real.exp (v * lam ^ 2 / 2) := by
+  rw [h_indep.mgf_add' hM hN, mgf_gaussianReal hlaw]
+  norm_num
+
+/-- **Full Theorem 1, conditional form.** With the probabilistic guarantees supplied as
+hypotheses --- `hdec`: the deconvolution identity for the probe moment `EX` (certified by
+`mgf_deconvolution`); `hG`: the upper confidence `EX ≤ G_up` (the empirical-Bernstein event);
+`hf`: the lower confidence `Xbar - eps ≤ fv` (the mean event) --- the certificate bound holds:
+`B(v) = max mu - fv ≤ (1/lam) * (log m + log G_up - lam^2 * v / 2) - (Xbar - eps)`. -/
+theorem certificate_assembly {ι : Type*} (s : Finset ι) (hs : s.Nonempty) (mu : ι → ℝ)
+    (lam v EX Gup fv Xbar eps : ℝ) (hlam : 0 < lam)
+    (hdec : EX = ((s.card : ℝ)⁻¹ * ∑ i ∈ s, Real.exp (lam * mu i)) * Real.exp (lam ^ 2 * v / 2))
+    (hG : EX ≤ Gup) (hf : Xbar - eps ≤ fv) :
+    s.sup' hs mu - fv ≤
+      (1 / lam) * (Real.log s.card + Real.log Gup - lam ^ 2 * v / 2) - (Xbar - eps) := by
+  have hcard : (0 : ℝ) < s.card := by
+    exact_mod_cast Finset.card_pos.mpr hs
+  have hsum : (0 : ℝ) < ∑ i ∈ s, Real.exp (lam * mu i) :=
+    Finset.sum_pos (fun i _ => Real.exp_pos _) hs
+  have hMmu : (0 : ℝ) < (s.card : ℝ)⁻¹ * ∑ i ∈ s, Real.exp (lam * mu i) := by positivity
+  have hEX : (0 : ℝ) < EX := by rw [hdec]; positivity
+  -- log of the mixture moment in terms of the (bounded) probe moment
+  have hlogM : Real.log ((s.card : ℝ)⁻¹ * ∑ i ∈ s, Real.exp (lam * mu i))
+      = Real.log EX - lam ^ 2 * v / 2 := by
+    rw [hdec, Real.log_mul (ne_of_gt hMmu) (Real.exp_ne_zero _), Real.log_exp]
+    ring
+  have hlogG : Real.log EX ≤ Real.log Gup := Real.log_le_log hEX hG
+  -- Step (i): the mechanized log-sum-exp bound
+  have h1 := max_le_logSumExp s hs mu lam hlam
+  rw [hlogM] at h1
+  have hmono : (1 / lam) * (Real.log s.card + (Real.log EX - lam ^ 2 * v / 2))
+      ≤ (1 / lam) * (Real.log s.card + Real.log Gup - lam ^ 2 * v / 2) := by
+    apply mul_le_mul_of_nonneg_left _ (by positivity)
+    linarith
+  have h2 : s.sup' hs mu ≤ (1 / lam) * (Real.log s.card + Real.log Gup - lam ^ 2 * v / 2) :=
+    le_trans h1 hmono
+  linarith
+
+end Canopy
