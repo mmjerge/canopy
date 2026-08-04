@@ -113,17 +113,21 @@ def _restore_router(router, snap) -> None:
     router.t = int(snap["t"])
 
 
-_EPISODES_FILE = "taubench_routing_episodes.json"
+OUT_SUFFIX = ""  # set from --out-tag so replicate runs write to separate files
+
+
+def _episodes_file() -> str:
+    return f"taubench_routing{OUT_SUFFIX}_episodes.json"
 
 
 def _save_episode_log(in_progress: dict) -> None:
     """Persist per-episode outcomes + router state for in-progress policies (per-episode resume)."""
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    (FIGDIR / _EPISODES_FILE).write_text(json.dumps({"in_progress": in_progress}))
+    (FIGDIR / _episodes_file()).write_text(json.dumps({"in_progress": in_progress}))
 
 
 def _load_episode_log() -> dict:
-    p = FIGDIR / _EPISODES_FILE
+    p = FIGDIR / _episodes_file()
     if p.exists():
         try:
             return json.loads(p.read_text()).get("in_progress", {})
@@ -338,7 +342,7 @@ def _write_outputs(results: dict, curves: dict, env_name: str, n_tasks: int, qui
     if not results:
         return
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    (FIGDIR / "taubench_routing_results.json").write_text(
+    (FIGDIR / f"taubench_routing{OUT_SUFFIX}_results.json").write_text(
         json.dumps({"env": env_name, "n_tasks": n_tasks, "results": results,
                     "learning_curves": curves}, indent=2)
     )
@@ -360,7 +364,7 @@ def _write_outputs(results: dict, curves: dict, env_name: str, n_tasks: int, qui
         "Policy & Task success [95\\% CI] & Avg.\\ cost/task (\\$) \\\\\n\\midrule\n"
         + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
     )
-    (FIGDIR / "taubench_routing_table.tex").write_text(tex)
+    (FIGDIR / f"taubench_routing{OUT_SUFFIX}_table.tex").write_text(tex)
     if quiet:
         return
     print(f"\ntau-bench {env_name}: {n_tasks} tasks (95% CI bootstrapped over tasks)")
@@ -414,7 +418,7 @@ def _plot(results: dict, curves: dict, env_name: str, n_tasks: int) -> str:
     axB.set_title("Online learning curve: regional vs. flat")
     axB.legend(loc="lower right")
     fig.tight_layout()
-    return str(save_figure(fig, "taubench_routing"))
+    return str(save_figure(fig, f"taubench_routing{OUT_SUFFIX}"))
 
 
 # --- mock tau-bench-like env + models (deterministic; runnable without tau_bench) ---------
@@ -500,7 +504,16 @@ def main() -> None:
     ap.add_argument("--resume", action="store_true",
                     help="skip policies already in paper/figures/taubench_routing_results.json")
     ap.add_argument("--verbose", action="store_true", help="trace the first task of each policy")
+    ap.add_argument("--learners-only", action="store_true",
+                    help="run only the two learned routers (skip the fixed-model cloud), for "
+                         "seed-variance replicates where the baselines are already measured")
+    ap.add_argument("--out-tag", default="",
+                    help="suffix for output/episode filenames, e.g. 'rep2', so replicate runs "
+                         "do not overwrite the main results")
     args = ap.parse_args()
+
+    global OUT_SUFFIX
+    OUT_SUFFIX = f"_{args.out_tag}" if args.out_tag else ""
 
     if args.mock:
         rng = np.random.default_rng(0)
@@ -567,8 +580,9 @@ def main() -> None:
     # (expensive) fixed-model cloud sweep that follows.
     policies["routed-regional (ours)"] = {"kind": "router", "make": make_regional, "nreg": N_REGIONS}
     policies["routed-flat"] = {"kind": "router", "make": make_flat, "nreg": 1}
-    for m in pool:
-        policies[_short(m)] = {"kind": "fixed", "model": m}
+    if not args.learners_only:
+        for m in pool:
+            policies[_short(m)] = {"kind": "fixed", "model": m}
 
     print(f"tau-bench {args.env}: {len(task_indices)} tasks x {args.trials} trial(s) "
           f"over {len(pool)} models; learned routing via ContextualUCBRouter")
@@ -579,7 +593,7 @@ def main() -> None:
     results: dict = {}
     curves: dict = {}
     if args.resume:
-        rp = FIGDIR / "taubench_routing_results.json"
+        rp = FIGDIR / f"taubench_routing{OUT_SUFFIX}_results.json"
         if rp.exists():
             loaded = json.loads(rp.read_text())
             results = {k: v for k, v in loaded.get("results", {}).items() if k in policies}
