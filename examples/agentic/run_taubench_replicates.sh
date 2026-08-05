@@ -26,6 +26,7 @@ for rep in rep2 rep3 rep4 rep5; do
   echo "=== tau-bench replicate $rep $(date -u) ==="
   "$PY" examples/agentic/taubench_routing.py --env retail --num-tasks 80 --trials 1 \
     --learners-only --out-tag "$rep" \
+    --user-model "bedrock/us.amazon.nova-pro-v1:0" \
     --cache "examples/.cache/taubench_routing_${rep}.jsonl" --resume
 done
 
