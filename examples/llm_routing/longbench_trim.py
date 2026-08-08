@@ -68,9 +68,43 @@ def qa_f1(pred: str, golds: list[str]) -> float:
     return best
 
 
-def build_prompt(context: str, question: str, frac: float) -> str:
+CHUNK_WORDS = 64  # retrieval-mode chunk size (fixed in PREREG_longbench_retrieval_trim.md)
+
+
+def _retrieval_trim(words: list[str], question: str, budget: int) -> list[str]:
+    """Keep the chunks most lexically relevant to the question, in document order.
+
+    Deterministic: chunks are scored by normalized question-term overlap and greedily kept
+    (highest score first, ties broken by document position) until the word budget is met.
+    """
+    q_terms = {w for w in _normalize(question).split() if len(w) > 2}
+    chunks = [words[i:i + CHUNK_WORDS] for i in range(0, len(words), CHUNK_WORDS)]
+    scored = []
+    for pos, ch in enumerate(chunks):
+        terms = set(_normalize(" ".join(ch)).split())
+        score = len(q_terms & terms) / (len(q_terms) or 1)
+        scored.append((-score, pos, ch))
+    kept: dict[int, list[str]] = {}  # pos -> (possibly truncated) chunk, chosen by score
+    used = 0
+    for _neg, pos, ch in sorted(scored):
+        if used >= budget:
+            break
+        take = ch[: budget - used]  # overflow is trimmed from this lowest-priority chunk
+        kept[pos] = take
+        used += len(take)
+    out: list[str] = []
+    for pos in sorted(kept):  # reassemble in original document order
+        out.extend(kept[pos])
+    return out
+
+
+def build_prompt(context: str, question: str, frac: float, mode: str = "prefix") -> str:
     words = context.split()[:CONTEXT_WORD_CAP]
-    kept = words[: max(1, int(len(words) * frac))]
+    budget = max(1, int(len(words) * frac))
+    if mode == "retrieval" and frac < 1.0:
+        kept = _retrieval_trim(words, question, budget)
+    else:
+        kept = words[:budget]
     trimmed = " ".join(kept)
     return (f"Read the context and answer the question as concisely as possible, using only a "
             f"short phrase.\n\nContext:\n{trimmed}\n\nQuestion: {question}\nAnswer:")
@@ -105,7 +139,8 @@ def load_longbench(tasks: list[str], n_per: int):
     return items, tasks
 
 
-def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoint_every=25):
+def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoint_every=25,
+                 trim_mode="prefix"):
     """Answer every (trim, item) with a real Bedrock model; resumable via the .npz aggregate."""
     from canopy.llm import BedrockClient, BudgetError, CachingLLMClient
 
@@ -136,7 +171,8 @@ def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoi
                 if done[lvl, qi]:
                     continue
                 try:
-                    text, it, _ = client.generate(MODEL, build_prompt(ctx, q, TRIM_FRACTIONS[lvl]))
+                    text, it, _ = client.generate(
+                        MODEL, build_prompt(ctx, q, TRIM_FRACTIONS[lvl], trim_mode))
                     quality[lvl, qi] = qa_f1(text, golds)
                     in_tokens[lvl, qi] = it
                     done[lvl, qi] = True
@@ -173,7 +209,7 @@ def measure_mock(items, seed=0):
     return quality, in_tokens
 
 
-def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False):
+def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False, suffix=""):
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     f1 = quality.mean(axis=1)
     costs, frontier = _sweep_lambda(quality, in_tokens, n_tasks, LAMBDAS)
@@ -190,7 +226,7 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False):
         ],
         "frontier": {k: [[float(a), float(b)] for a, b in v] for k, v in frontier.items()},
     }
-    (FIGURE_DIR / "longbench_trim_results.json").write_text(json.dumps(payload, indent=2))
+    (FIGURE_DIR / f"longbench_trim{suffix}_results.json").write_text(json.dumps(payload, indent=2))
 
     rows = [
         f"Full context (keep 1.00) & {f1[0]:.3f} & {costs[0]:.0f} \\\\",
@@ -206,7 +242,7 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False):
         "Policy & QA-F1 & Avg.\\ input tokens \\\\\n\\midrule\n"
         + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
     )
-    (FIGURE_DIR / "longbench_trim_table.tex").write_text(tex)
+    (FIGURE_DIR / f"longbench_trim{suffix}_table.tex").write_text(tex)
 
     if quiet:
         return
@@ -217,13 +253,13 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False):
           f"best-fixed: F1={f1[best_fixed]:.3f} tok={costs[best_fixed]:.0f}  |  "
           f"oracle: F1={orc_f1:.3f} tok={orc_tok:.0f}")
     try:
-        out = _plot(f1, costs, frontier, model)
+        out = _plot(f1, costs, frontier, model, suffix)
         print(f"\nwrote json+table to {FIGURE_DIR} and figure to {out} (+ .png)")
     except Exception as e:  # noqa: BLE001
         print(f"\nwrote json+table to {FIGURE_DIR} (figure skipped: {type(e).__name__}: {e})")
 
 
-def _plot(f1, costs, frontier, model):
+def _plot(f1, costs, frontier, model, suffix=""):
     set_style()
     import matplotlib.pyplot as plt
 
@@ -245,7 +281,7 @@ def _plot(f1, costs, frontier, model):
     ax.set_title(f"LongBench context trimming on {model.split('.')[-1]}: adaptive frontier")
     ax.legend(loc="lower left")
     fig.tight_layout()
-    return str(save_figure(fig, "longbench_trim"))
+    return str(save_figure(fig, f"longbench_trim{suffix}"))
 
 
 def main() -> None:
@@ -256,11 +292,15 @@ def main() -> None:
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="examples/.cache/longbench_trim.jsonl")
+    ap.add_argument("--trim-mode", default="prefix", choices=["prefix", "retrieval"],
+                    help="trimming primitive: positional prefix truncation (paper default) or "
+                         "retrieval-scored chunk selection (PREREG_longbench_retrieval_trim.md)")
     ap.add_argument("--mock", action="store_true", help="fabricate data; no deps/creds")
     args = ap.parse_args()
 
     tasks = [t for t in args.tasks.split(",") if t.strip()]
-    npz_cache = Path(__file__).parent / "longbench_trim.npz"
+    suffix = "" if args.trim_mode == "prefix" else f"_{args.trim_mode}"
+    npz_cache = Path(__file__).parent / f"longbench_trim{suffix}.npz"
 
     if args.mock:
         items = [("ctx " * 500, "q?", ["a"], i % len(tasks)) for i in range(len(tasks) * args.n_per)]
@@ -270,14 +310,15 @@ def main() -> None:
         try:
             items, tasks = load_longbench(tasks, args.n_per)
             quality, in_tokens = measure_real(items, args.region, args.cache, args.max_calls,
-                                              args.max_spend, npz_cache)
+                                              args.max_spend, npz_cache,
+                                              trim_mode=args.trim_mode)
         except Exception as e:  # noqa: BLE001
             print(f"Real run unavailable ({type(e).__name__}: {e}).\n"
                   "Needs the bench extra + AWS Bedrock. Smoke-test with: --mock")
             return
         model_label = MODEL
 
-    _write_outputs(items, quality, in_tokens, model_label, len(tasks))
+    _write_outputs(items, quality, in_tokens, model_label, len(tasks), suffix=suffix)
 
 
 if __name__ == "__main__":
