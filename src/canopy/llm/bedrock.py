@@ -72,6 +72,9 @@ class BedrockClient:
         max_retries: int = 6,
     ) -> None:
         self.max_tokens = max_tokens
+        # Models that reject the Converse ``temperature`` field (claude-sonnet-5+,
+        # gpt-5.6): learned on first ValidationException, then skipped thereafter.
+        self._no_temperature: set[str] = set()
         self.pricing = pricing or DEFAULT_PRICING
         self.region = region
         self.max_retries = max_retries
@@ -110,6 +113,8 @@ class BedrockClient:
         stochastically at ``temperature`` (it has no portable seed field), so it is used only to
         keep draws distinct in any wrapping cache, not forwarded to the model.
         """
+        if model_id in self._no_temperature:
+            temperature = None
         cfg: dict = {"maxTokens": max_tokens or self.max_tokens}
         if temperature is not None:
             cfg["temperature"] = temperature
@@ -125,6 +130,17 @@ class BedrockClient:
                 )
                 break
             except Exception as e:  # noqa: BLE001
+                if (
+                    type(e).__name__ == "ValidationException"
+                    and "temperature" in cfg
+                    and "temperature" in str(e)
+                ):
+                    # Newer models (claude-sonnet-5+, gpt-5.6) reject the temperature
+                    # field outright. They sample stochastically at their defaults, so
+                    # dropping it preserves the distinct draws best-of-N relies on.
+                    del cfg["temperature"]
+                    self._no_temperature.add(model_id)
+                    continue
                 if type(e).__name__ not in _TRANSIENT_ERRORS or attempt == self.max_retries:
                     raise
                 time.sleep(min(2.0**attempt + random.random(), 30.0))
