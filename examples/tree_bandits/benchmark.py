@@ -95,8 +95,9 @@ def fidelity_panel(ax) -> None:
     ratios = [1.0, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01]
     print(f"\n[fidelity sweep @ budget={budget}]  probe/leaf cost -> mean recall")
     for method in ("Hierarchical", "HierarchicalSound", "SuccessiveElim"):
-        samples = np.array([recall_samples(method, budget, r)
-                            for r in progress(ratios, f"fidelity {method}")])
+        samples = np.array(
+            [recall_samples(method, budget, r) for r in progress(ratios, f"fidelity {method}")]
+        )
         ci_band(ax, ratios, samples, COLORS[method], LABELS[method], MARKERS[method])
         print(f"  {method:15s} " + " ".join(f"{s.mean():.2f}" for s in samples))
     ax.set_xscale("log")
@@ -113,8 +114,9 @@ def cost_budget_panel(ax) -> None:
     budgets = [400, 800, 1500, 3000, 6000, 12000]
     print(f"\n[cost-budget sweep @ probe_cost={probe_cost}]  budget -> mean recall")
     for method in ("Hierarchical", "HierarchicalSound", "SuccessiveElim", "Uniform"):
-        samples = np.array([recall_samples(method, b, probe_cost)
-                            for b in progress(budgets, f"budget {method}")])
+        samples = np.array(
+            [recall_samples(method, b, probe_cost) for b in progress(budgets, f"budget {method}")]
+        )
         ci_band(ax, budgets, samples, COLORS[method], LABELS[method], MARKERS[method])
         print(f"  {method:15s} " + " ".join(f"{s.mean():.2f}" for s in samples))
     ax.set_xscale("log")

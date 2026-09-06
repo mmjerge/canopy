@@ -78,7 +78,7 @@ def _retrieval_trim(words: list[str], question: str, budget: int) -> list[str]:
     (highest score first, ties broken by document position) until the word budget is met.
     """
     q_terms = {w for w in _normalize(question).split() if len(w) > 2}
-    chunks = [words[i:i + CHUNK_WORDS] for i in range(0, len(words), CHUNK_WORDS)]
+    chunks = [words[i : i + CHUNK_WORDS] for i in range(0, len(words), CHUNK_WORDS)]
     scored = []
     for pos, ch in enumerate(chunks):
         terms = set(_normalize(" ".join(ch)).split())
@@ -106,8 +106,10 @@ def build_prompt(context: str, question: str, frac: float, mode: str = "prefix")
     else:
         kept = words[:budget]
     trimmed = " ".join(kept)
-    return (f"Read the context and answer the question as concisely as possible, using only a "
-            f"short phrase.\n\nContext:\n{trimmed}\n\nQuestion: {question}\nAnswer:")
+    return (
+        f"Read the context and answer the question as concisely as possible, using only a "
+        f"short phrase.\n\nContext:\n{trimmed}\n\nQuestion: {question}\nAnswer:"
+    )
 
 
 def load_longbench(tasks: list[str], n_per: int):
@@ -139,8 +141,9 @@ def load_longbench(tasks: list[str], n_per: int):
     return items, tasks
 
 
-def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoint_every=25,
-                 trim_mode="prefix"):
+def measure_real(
+    items, region, cache, max_calls, max_spend, npz_cache, checkpoint_every=25, trim_mode="prefix"
+):
     """Answer every (trim, item) with a real Bedrock model; resumable via the .npz aggregate."""
     from canopy.llm import BedrockClient, BudgetError, CachingLLMClient
 
@@ -153,11 +156,16 @@ def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoi
             return quality, in_tokens
         print(f"resuming from {npz_cache.name}: {int(done.sum())}/{done.size} cells done")
     else:
-        quality = np.zeros((N_TRIM, n)); in_tokens = np.zeros((N_TRIM, n))
+        quality = np.zeros((N_TRIM, n))
+        in_tokens = np.zeros((N_TRIM, n))
         done = np.zeros((N_TRIM, n), dtype=bool)
 
-    client = CachingLLMClient(BedrockClient(region=region, max_tokens=64), cache,
-                              max_calls=max_calls, max_spend_usd=max_spend)
+    client = CachingLLMClient(
+        BedrockClient(region=region, max_tokens=64),
+        cache,
+        max_calls=max_calls,
+        max_spend_usd=max_spend,
+    )
     fails = since = 0
 
     def _save():
@@ -172,7 +180,8 @@ def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoi
                     continue
                 try:
                     text, it, _ = client.generate(
-                        MODEL, build_prompt(ctx, q, TRIM_FRACTIONS[lvl], trim_mode))
+                        MODEL, build_prompt(ctx, q, TRIM_FRACTIONS[lvl], trim_mode)
+                    )
                     quality[lvl, qi] = qa_f1(text, golds)
                     in_tokens[lvl, qi] = it
                     done[lvl, qi] = True
@@ -184,12 +193,16 @@ def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoi
                         print(f"  call failed: {type(e).__name__}: {str(e)[:110]}")
                 since += 1
                 if since >= checkpoint_every:
-                    _save(); since = 0
-            print(f"  trim {lvl} (keep {TRIM_FRACTIONS[lvl]:.2f}): "
-                  f"F1={quality[lvl].mean():.3f} in_tok={in_tokens[lvl].mean():.0f}")
+                    _save()
+                    since = 0
+            print(
+                f"  trim {lvl} (keep {TRIM_FRACTIONS[lvl]:.2f}): "
+                f"F1={quality[lvl].mean():.3f} in_tok={in_tokens[lvl].mean():.0f}"
+            )
     except BudgetError as e:
         print(f"\n[budget stop] {e}  Saving progress; re-run to resume.")
-        _save(); raise
+        _save()
+        raise
     _save()
     print(f"  budget: {client.stats()}")
     if fails > 0.2 * N_TRIM * n:
@@ -200,7 +213,8 @@ def measure_real(items, region, cache, max_calls, max_spend, npz_cache, checkpoi
 def measure_mock(items, seed=0):
     rng = np.random.default_rng(seed)
     n = len(items)
-    quality = np.zeros((N_TRIM, n)); in_tokens = np.zeros((N_TRIM, n))
+    quality = np.zeros((N_TRIM, n))
+    in_tokens = np.zeros((N_TRIM, n))
     base_tok = np.array([3200.0, 2150.0, 1650.0, 1100.0, 520.0])
     base_f1 = np.array([0.42, 0.42, 0.41, 0.37, 0.28])  # F1 degrades as context is trimmed away
     for lvl in range(N_TRIM):
@@ -219,10 +233,17 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False, suffi
     orc_tok, orc_f1 = frontier["oracle"][li]
 
     payload = {
-        "model": model, "n_items": len(items), "n_tasks": n_tasks, "lambdas": LAMBDAS,
+        "model": model,
+        "n_items": len(items),
+        "n_tasks": n_tasks,
+        "lambdas": LAMBDAS,
         "trim_levels": [
-            {"keep_fraction": TRIM_FRACTIONS[t], "f1": float(f1[t]),
-             "avg_input_tokens": float(costs[t])} for t in range(N_TRIM)
+            {
+                "keep_fraction": TRIM_FRACTIONS[t],
+                "f1": float(f1[t]),
+                "avg_input_tokens": float(costs[t]),
+            }
+            for t in range(N_TRIM)
         ],
         "frontier": {k: [[float(a), float(b)] for a, b in v] for k, v in frontier.items()},
     }
@@ -240,7 +261,8 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False, suffi
         f"{len(items)} items across {n_tasks} tasks, QA-F1.\n"
         "\\begin{tabular}{lrr}\n\\toprule\n"
         "Policy & QA-F1 & Avg.\\ input tokens \\\\\n\\midrule\n"
-        + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (FIGURE_DIR / f"longbench_trim{suffix}_table.tex").write_text(tex)
 
@@ -249,9 +271,11 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False, suffi
     print(f"\ncontext trimming on {model} ({len(items)} items, {n_tasks} LongBench tasks):")
     for t in range(N_TRIM):
         print(f"  keep {TRIM_FRACTIONS[t]:.2f}: F1={f1[t]:.3f}  tokens={costs[t]:.0f}")
-    print(f"  adaptive(lam=0.3): F1={adapt_f1:.3f} tok={adapt_tok:.0f}  |  "
-          f"best-fixed: F1={f1[best_fixed]:.3f} tok={costs[best_fixed]:.0f}  |  "
-          f"oracle: F1={orc_f1:.3f} tok={orc_tok:.0f}")
+    print(
+        f"  adaptive(lam=0.3): F1={adapt_f1:.3f} tok={adapt_tok:.0f}  |  "
+        f"best-fixed: F1={f1[best_fixed]:.3f} tok={costs[best_fixed]:.0f}  |  "
+        f"oracle: F1={orc_f1:.3f} tok={orc_tok:.0f}"
+    )
     try:
         out = _plot(f1, costs, frontier, model, suffix)
         print(f"\nwrote json+table to {FIGURE_DIR} and figure to {out} (+ .png)")
@@ -265,11 +289,21 @@ def _plot(f1, costs, frontier, model, suffix=""):
 
     fig, ax = plt.subplots(figsize=(6.8, 4.8))
     order = np.argsort(costs)
-    ax.plot(np.asarray(costs)[order], np.asarray(f1)[order], "o-", color=PALETTE["blue"],
-            label="fixed keep-fraction")
+    ax.plot(
+        np.asarray(costs)[order],
+        np.asarray(f1)[order],
+        "o-",
+        color=PALETTE["blue"],
+        label="fixed keep-fraction",
+    )
     for t in range(N_TRIM):
-        ax.annotate(f"keep {TRIM_FRACTIONS[t]:.2f}", (costs[t], f1[t]), fontsize=7,
-                    xytext=(4, 4), textcoords="offset points")
+        ax.annotate(
+            f"keep {TRIM_FRACTIONS[t]:.2f}",
+            (costs[t], f1[t]),
+            fontsize=7,
+            xytext=(4, 4),
+            textcoords="offset points",
+        )
     for key, col, mk, lab in [
         ("adaptive", PALETTE["red"], "*", "adaptive per-task (ours)"),
         ("oracle", PALETTE["green"], "D", "per-item oracle"),
@@ -292,9 +326,13 @@ def main() -> None:
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="examples/.cache/longbench_trim.jsonl")
-    ap.add_argument("--trim-mode", default="prefix", choices=["prefix", "retrieval"],
-                    help="trimming primitive: positional prefix truncation (paper default) or "
-                         "retrieval-scored chunk selection (PREREG_longbench_retrieval_trim.md)")
+    ap.add_argument(
+        "--trim-mode",
+        default="prefix",
+        choices=["prefix", "retrieval"],
+        help="trimming primitive: positional prefix truncation (paper default) or "
+        "retrieval-scored chunk selection (PREREG_longbench_retrieval_trim.md)",
+    )
     ap.add_argument("--mock", action="store_true", help="fabricate data; no deps/creds")
     args = ap.parse_args()
 
@@ -303,18 +341,28 @@ def main() -> None:
     npz_cache = Path(__file__).parent / f"longbench_trim{suffix}.npz"
 
     if args.mock:
-        items = [("ctx " * 500, "q?", ["a"], i % len(tasks)) for i in range(len(tasks) * args.n_per)]
+        items = [
+            ("ctx " * 500, "q?", ["a"], i % len(tasks)) for i in range(len(tasks) * args.n_per)
+        ]
         quality, in_tokens = measure_mock(items)
         model_label = "mock"
     else:
         try:
             items, tasks = load_longbench(tasks, args.n_per)
-            quality, in_tokens = measure_real(items, args.region, args.cache, args.max_calls,
-                                              args.max_spend, npz_cache,
-                                              trim_mode=args.trim_mode)
+            quality, in_tokens = measure_real(
+                items,
+                args.region,
+                args.cache,
+                args.max_calls,
+                args.max_spend,
+                npz_cache,
+                trim_mode=args.trim_mode,
+            )
         except Exception as e:  # noqa: BLE001
-            print(f"Real run unavailable ({type(e).__name__}: {e}).\n"
-                  "Needs the bench extra + AWS Bedrock. Smoke-test with: --mock")
+            print(
+                f"Real run unavailable ({type(e).__name__}: {e}).\n"
+                "Needs the bench extra + AWS Bedrock. Smoke-test with: --mock"
+            )
             return
         model_label = MODEL
 

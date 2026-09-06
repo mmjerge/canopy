@@ -74,15 +74,20 @@ def audit_file(path: Path, name: str, expect=None):
     lo, hi = paired_bootstrap(bo, vg)
     b, c, p = mcnemar_p(bo, vg)
     ratio = vg_m / bo_m if bo_m > 0 else float("inf")
-    print(f"{name}: n={n}  bo={bo_m:.3f}  vg={vg_m:.3f}  delta={delta:+.3f} "
-          f"CI[{lo:+.3f},{hi:+.3f}]  ratio={ratio:.2f}x  "
-          f"discordant bo-only={b} vg-only={c}  McNemar p={p:.4f}")
+    print(
+        f"{name}: n={n}  bo={bo_m:.3f}  vg={vg_m:.3f}  delta={delta:+.3f} "
+        f"CI[{lo:+.3f},{hi:+.3f}]  ratio={ratio:.2f}x  "
+        f"discordant bo-only={b} vg-only={c}  McNemar p={p:.4f}"
+    )
     ok = True
     if expect is not None:
         e_bo, e_vg, e_d, e_lo, e_hi = expect
         checks = [
-            ("bo", bo_m, e_bo, 0.0005), ("vg", vg_m, e_vg, 0.0005),
-            ("delta", delta, e_d, 0.0005), ("lo", lo, e_lo, 0.015), ("hi", hi, e_hi, 0.015),
+            ("bo", bo_m, e_bo, 0.0005),
+            ("vg", vg_m, e_vg, 0.0005),
+            ("delta", delta, e_d, 0.0005),
+            ("lo", lo, e_lo, 0.015),
+            ("hi", hi, e_hi, 0.015),
         ]
         for label, got, want, tol in checks:
             if abs(got - want) > tol:
@@ -95,8 +100,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--figdir", default=None)
     args = ap.parse_args()
-    figdir = Path(args.figdir) if args.figdir else (
-        Path(__file__).resolve().parents[2] / "paper" / "figures")
+    figdir = (
+        Path(args.figdir)
+        if args.figdir
+        else (Path(__file__).resolve().parents[2] / "paper" / "figures")
+    )
 
     all_ok = True
 
@@ -127,8 +135,10 @@ def main():
     if found == 0:
         print("no sweep cell JSONs in this figdir (they may live on the GPU box)")
 
-    print(f"\nAUDIT {'PASSED' if all_ok else 'FAILED'} "
-          f"(flagship{' + ' + str(found) + ' sweep cells' if found else ' only'})")
+    print(
+        f"\nAUDIT {'PASSED' if all_ok else 'FAILED'} "
+        f"(flagship{' + ' + str(found) + ' sweep cells' if found else ' only'})"
+    )
 
 
 if __name__ == "__main__":

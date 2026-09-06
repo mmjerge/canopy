@@ -32,7 +32,10 @@ from canopy.bandits import run_cache
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 from vllm_prefix_cache_eval import (  # noqa: E402  (reuse server + trace helpers)
-    build_trace, one_request, start_server, wait_ready,
+    build_trace,
+    one_request,
+    start_server,
+    wait_ready,
 )
 
 FIGDIR = Path(__file__).resolve().parents[2] / "paper" / "figures"
@@ -42,6 +45,7 @@ POLICIES = ["lru", "lfu", "adaptive", "offline"]
 def get_encode():
     try:
         import tiktoken
+
         return tiktoken.get_encoding("cl100k_base").encode
     except Exception:  # noqa: BLE001
         return lambda s: [hash(w) % 50000 for w in s.split()]
@@ -63,7 +67,9 @@ def calibrate_ms_per_token(base_url, model, lengths, max_tokens, dry_run):
         cold = f"fresh{i} " + " ".join(f"u{i}_{k}" for k in range(L)) + " ? Answer briefly."
         ttft_cold, _, ok1 = one_request(base_url, model, cold, max_tokens)
         one_request(base_url, model, prefix + " prime ? Answer briefly.", max_tokens)  # warm
-        ttft_warm, _, ok2 = one_request(base_url, model, prefix + " query ? Answer briefly.", max_tokens)
+        ttft_warm, _, ok2 = one_request(
+            base_url, model, prefix + " query ? Answer briefly.", max_tokens
+        )
         if ok1 and ok2 and ttft_cold and ttft_warm and ttft_cold > ttft_warm:
             per_tok.append((ttft_cold - ttft_warm) / max(1, L))
     val = float(np.median(per_tok)) if per_tok else 0.0
@@ -85,9 +91,10 @@ def replay(stream, budget, ms_per_token):
     for p in POLICIES:
         curve = np.asarray(run_cache(stream, budget, policy=p).savings_curve, dtype=float)
         stat = float(curve[: n // 2].mean()) if n else 0.0
-        shift = float(curve[3 * n // 4:].mean()) if n else 0.0
+        shift = float(curve[3 * n // 4 :].mean()) if n else 0.0
         out[p] = {
-            "tokens_saved_stationary": stat, "tokens_saved_postshift": shift,
+            "tokens_saved_stationary": stat,
+            "tokens_saved_postshift": shift,
             "ttft_saved_ms_stationary": stat * ms_per_token * 1000,
             "ttft_saved_ms_postshift": shift * ms_per_token * 1000,
         }
@@ -96,28 +103,47 @@ def replay(stream, budget, ms_per_token):
 
 def _write_outputs(model, ms_per_token, budget, res, quiet=False):
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    (FIGDIR / "vllm_policy_results.json").write_text(json.dumps(
-        {"model": model, "ms_per_token": ms_per_token, "kv_budget": budget, "policies": res},
-        indent=2))
-    name = {"lru": "LRU (engine default)", "lfu": "LFU", "adaptive": "\\textbf{Adaptive (ours)}",
-            "offline": "Offline-optimal"}
+    (FIGDIR / "vllm_policy_results.json").write_text(
+        json.dumps(
+            {"model": model, "ms_per_token": ms_per_token, "kv_budget": budget, "policies": res},
+            indent=2,
+        )
+    )
+    name = {
+        "lru": "LRU (engine default)",
+        "lfu": "LFU",
+        "adaptive": "\\textbf{Adaptive (ours)}",
+        "offline": "Offline-optimal",
+    }
     rows = []
     for p in POLICIES:
         s, sh = res[p]["ttft_saved_ms_stationary"], res[p]["ttft_saved_ms_postshift"]
-        cs, csh = (f"\\textbf{{{s:.1f}}}", f"\\textbf{{{sh:.1f}}}") if p == "adaptive" else (f"{s:.1f}", f"{sh:.1f}")
+        cs, csh = (
+            (f"\\textbf{{{s:.1f}}}", f"\\textbf{{{sh:.1f}}}")
+            if p == "adaptive"
+            else (f"{s:.1f}", f"{sh:.1f}")
+        )
         rows.append(f"{name[p]} & {cs} & {csh} \\\\")
-    tex = ("% vLLM-calibrated eviction policy comparison (vllm_policy_eval.py)\n"
-           "\\begin{tabular}{lrr}\n\\toprule\n"
-           "Policy & TTFT saved, stationary (ms) & TTFT saved, post-shift (ms) \\\\\n\\midrule\n"
-           + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n")
+    tex = (
+        "% vLLM-calibrated eviction policy comparison (vllm_policy_eval.py)\n"
+        "\\begin{tabular}{lrr}\n\\toprule\n"
+        "Policy & TTFT saved, stationary (ms) & TTFT saved, post-shift (ms) \\\\\n\\midrule\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
+    )
     (FIGDIR / "vllm_policy_table.tex").write_text(tex)
     if quiet:
         return
-    print(f"\nGPU-calibrated eviction policies ({model}, ms/token={ms_per_token*1000:.3f}, B={budget}):")
+    print(
+        f"\nGPU-calibrated eviction policies ({model}, "
+        f"ms/token={ms_per_token*1000:.3f}, B={budget}):"
+    )
     print(f"  {'policy':22s} {'stationary(ms)':>15s} {'post-shift(ms)':>15s}")
     for p in POLICIES:
-        print(f"  {p:22s} {res[p]['ttft_saved_ms_stationary']:15.1f} "
-              f"{res[p]['ttft_saved_ms_postshift']:15.1f}")
+        print(
+            f"  {p:22s} {res[p]['ttft_saved_ms_stationary']:15.1f} "
+            f"{res[p]['ttft_saved_ms_postshift']:15.1f}"
+        )
     try:
         _plot(model, res)
     except Exception as e:  # noqa: BLE001
@@ -127,6 +153,7 @@ def _write_outputs(model, ms_per_token, budget, res, quiet=False):
 def _plot(model, res):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from _plotstyle import PALETTE, save_figure, set_style
+
     set_style()
     import matplotlib.pyplot as plt
     import numpy as np
@@ -179,7 +206,8 @@ def main() -> None:
     proc = start_server(args.model, args.port, True, args.gpu_memory_utilization, args.extra_arg)
     try:
         if not wait_ready(base_url):
-            print("[error] server never became ready."); return
+            print("[error] server never became ready.")
+            return
         one_request(base_url, args.model, text_trace[0], args.max_tokens)  # warm up
         ms = calibrate_ms_per_token(base_url, args.model, lengths, args.max_tokens, False)
         if ms <= 0:

@@ -61,7 +61,7 @@ MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
 def load_swebench(n: int, dataset_name: str, difficulty: str = "", repo: str = "") -> list[dict]:
-    """Load ``n`` SWE-bench instances (issue + test metadata), optionally filtered and repo-balanced.
+    """Load ``n`` SWE-bench instances (issue + test metadata), optionally filtered/repo-balanced.
 
     Taking the first ``n`` rows biases to one repo (they are sorted by instance id, so SWE-bench
     Verified starts with all-astropy, one of the hardest repos). Instead we optionally filter by
@@ -89,13 +89,15 @@ def load_swebench(n: int, dataset_name: str, difficulty: str = "", repo: str = "
                 ordered.append(lst.pop(0))
     items = []
     for row in ordered[:n]:
-        items.append({
-            "instance_id": row["instance_id"],
-            "repo": row["repo"],
-            "problem_statement": row["problem_statement"],
-            "base_commit": row["base_commit"],
-            "patch": row["patch"],  # gold patch: used ONLY to localize oracle files (not shown)
-        })
+        items.append(
+            {
+                "instance_id": row["instance_id"],
+                "repo": row["repo"],
+                "problem_statement": row["problem_statement"],
+                "base_commit": row["base_commit"],
+                "patch": row["patch"],  # gold patch: used ONLY to localize oracle files (not shown)
+            }
+        )
     return items
 
 
@@ -117,8 +119,9 @@ def _best_index(outcomes: list[dict]) -> int:
 def best_of_n_swe(instance, generate, grader, n, max_tokens, run_id):
     """Sample ``n`` patches from the issue, select by cheap probe, grade the selection (leaf)."""
     files = instance.get("_files", {})
-    prompt = SWEBENCH_PROMPTS[0].format(repo=instance["repo"], q=instance["problem_statement"],
-                                        files=format_files(files))
+    prompt = SWEBENCH_PROMPTS[0].format(
+        repo=instance["repo"], q=instance["problem_statement"], files=format_files(files)
+    )
     patches, calls = [], 0
     for i in range(n):
         text = generate(prompt, max_tokens, i)
@@ -133,8 +136,9 @@ def value_guided_swe(instance, generate, grader, branching, depth, max_tokens, r
     """Sample B patches, keep best by cheap probe, then D feedback-conditioned refine rounds."""
     files = instance.get("_files", {})
     files_str = format_files(files)
-    solve = SWEBENCH_PROMPTS[0].format(repo=instance["repo"], q=instance["problem_statement"],
-                                       files=files_str)
+    solve = SWEBENCH_PROMPTS[0].format(
+        repo=instance["repo"], q=instance["problem_statement"], files=files_str
+    )
     calls = 0
     # round 0: B fresh candidate patches
     patches = []
@@ -150,8 +154,11 @@ def value_guided_swe(instance, generate, grader, branching, depth, max_tokens, r
     for step in range(1, depth + 1):
         feedback = failing_f2p_feedback(best_outcome)
         refine = SWEBENCH_PROMPTS[1].format(
-            repo=instance["repo"], q=instance["problem_statement"], files=files_str,
-            prefix=best_patch or "(empty patch)", feedback=feedback,
+            repo=instance["repo"],
+            q=instance["problem_statement"],
+            files=files_str,
+            prefix=best_patch or "(empty patch)",
+            feedback=feedback,
         )
         cand_patches = []
         for c in range(branching):
@@ -168,8 +175,9 @@ def value_guided_swe(instance, generate, grader, branching, depth, max_tokens, r
     return {"resolved": int(is_resolved(best_outcome)), "calls": calls}
 
 
-def run_level(instances, generate, grader, branching, depth, max_tokens, run_id,
-              per_instance, checkpoint):
+def run_level(
+    instances, generate, grader, branching, depth, max_tokens, run_id, per_instance, checkpoint
+):
     """Run both strategies over all instances at the matched budget, checkpointing per instance.
 
     ``per_instance`` maps ``instance_id -> {"bo": 0/1, "vg": 0/1}`` and is updated in place;
@@ -188,7 +196,8 @@ def run_level(instances, generate, grader, branching, depth, max_tokens, run_id,
         # instances only; mock instances carry no base_commit and fall back to raw-diff parsing)
         if inst.get("base_commit") and "_files" not in inst:
             inst["_files"] = fetch_oracle_files(
-                inst["repo"], inst["base_commit"], patched_paths(inst.get("patch", "")))
+                inst["repo"], inst["base_commit"], patched_paths(inst.get("patch", ""))
+            )
         try:
             bo = best_of_n_swe(inst, generate, grader, n, max_tokens, run_id)
             vg = value_guided_swe(inst, generate, grader, branching, depth, max_tokens, run_id)
@@ -207,7 +216,7 @@ def run_level(instances, generate, grader, branching, depth, max_tokens, run_id,
 
 
 def _hits(per_instance):
-    """Per-instance 0/1 lists (best-of-N, value-guided) from the checkpoint map, in insertion order."""
+    """Per-instance 0/1 lists (best-of-N, value-guided) from the checkpoint map, insertion order."""
     bo = [v["bo"] for v in per_instance.values()]
     vg = [v["vg"] for v in per_instance.values()]
     return bo, vg
@@ -241,12 +250,19 @@ def _stem(tag):
 
 
 def write_checkpoint(per_instance, budget, model, dataset_name, tag):
-    """Persist the per-instance checkpoint (results JSON only) so a crash resumes where it left off."""
+    """Persist the per-instance checkpoint (results JSON only) so a crash can resume."""
     FIGDIR.mkdir(parents=True, exist_ok=True)
     (FIGDIR / f"{_stem(tag)}_results.json").write_text(
-        json.dumps({"benchmark": tag, "dataset": dataset_name, "model": model,
-                    "n_instances": len(per_instance),
-                    "level": {"matched_budget": budget, "per_instance": per_instance}}, indent=2)
+        json.dumps(
+            {
+                "benchmark": tag,
+                "dataset": dataset_name,
+                "model": model,
+                "n_instances": len(per_instance),
+                "level": {"matched_budget": budget, "per_instance": per_instance},
+            },
+            indent=2,
+        )
     )
 
 
@@ -273,9 +289,11 @@ def _write_outputs(per_instance, budget, model, dataset_name, tag="swebench"):
     )
     (FIGDIR / f"{stem}_table.tex").write_text(tex)
     print(f"\nSWE-bench ({dataset_name}, {len(per_instance)} instances), model {model}")
-    print(f"  budget {b}: best-of-N resolved={bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}]  "
-          f"value-guided resolved={vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}]  "
-          f"delta={d_m:+.3f} [{d_lo:+.2f},{d_hi:+.2f}]")
+    print(
+        f"  budget {b}: best-of-N resolved={bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}]  "
+        f"value-guided resolved={vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}]  "
+        f"delta={d_m:+.3f} [{d_lo:+.2f},{d_hi:+.2f}]"
+    )
     print(f"  wrote json+table to {FIGDIR}")
 
 
@@ -291,22 +309,33 @@ def make_mock_generate(seed: int = 0):
         p_fix = 0.55 if refining else 0.30
         body = "FIX\n" if rng.random() < p_fix else ""
         h = hashlib.md5(f"{prompt}{call_seed}".encode()).hexdigest()[:8]
-        return (f"```diff\ndiff --git a/mod.py b/mod.py\n--- a/mod.py\n+++ b/mod.py\n"
-                f"@@ -1,1 +1,2 @@\n {body}+# patch {h}\n```")
+        return (
+            f"```diff\ndiff --git a/mod.py b/mod.py\n--- a/mod.py\n+++ b/mod.py\n"
+            f"@@ -1,1 +1,2 @@\n {body}+# patch {h}\n```"
+        )
 
     return generate
 
 
 def load_mock_instances(n: int):
-    return [{"instance_id": f"mock__repo-{i}", "repo": "mock/repo",
-             "problem_statement": f"Mock issue #{i}: the widget miscomputes the total."} for i in range(n)]
+    return [
+        {
+            "instance_id": f"mock__repo-{i}",
+            "repo": "mock/repo",
+            "problem_statement": f"Mock issue #{i}: the widget miscomputes the total.",
+        }
+        for i in range(n)
+    ]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="princeton-nlp/SWE-bench_Verified")
-    ap.add_argument("--difficulty", default="",
-                    help="filter by SWE-bench difficulty tier, e.g. '<15 min fix' (Verified only)")
+    ap.add_argument(
+        "--difficulty",
+        default="",
+        help="filter by SWE-bench difficulty tier, e.g. '<15 min fix' (Verified only)",
+    )
     ap.add_argument("--repo", default="", help="restrict to one repo, e.g. django/django")
     ap.add_argument("--n-instances", type=int, default=20)
     ap.add_argument("--model", default=MODEL_ID)
@@ -315,15 +344,23 @@ def main() -> None:
     ap.add_argument("--depth", type=int, default=1, help="refinement rounds; budget = B*(depth+1)")
     ap.add_argument("--max-tokens", type=int, default=2048)
     ap.add_argument("--harness-workers", type=int, default=4)
-    ap.add_argument("--namespace", default=None,
-                    help="swebench image namespace; '' forces local builds (arm64). Default: DockerHub.")
+    ap.add_argument(
+        "--namespace",
+        default=None,
+        help="swebench image namespace; '' forces local builds (arm64). Default: DockerHub.",
+    )
     ap.add_argument("--run-id", default="canopy_swe")
     ap.add_argument("--work-dir", default="examples/.cache/swebench")
     ap.add_argument("--cache", default="examples/.cache/reasoning_swebench.jsonl")
     ap.add_argument("--tag", default="swebench")
-    ap.add_argument("--resume", action="store_true",
-                    help="skip if the results JSON for this tag already has the level")
-    ap.add_argument("--mock", action="store_true", help="deterministic mock model+grader, no Docker")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="skip if the results JSON for this tag already has the level",
+    )
+    ap.add_argument(
+        "--mock", action="store_true", help="deterministic mock model+grader, no Docker"
+    )
     args = ap.parse_args()
 
     if args.mock:
@@ -345,22 +382,30 @@ def main() -> None:
             base = BedrockClient(region=args.region, max_tokens=args.max_tokens)
             client = CachingLLMClient(base, args.cache)
             generate = as_generate_fn(client, args.model, temperature=0.7)
-            instances = load_swebench(args.n_instances, args.dataset,
-                                       difficulty=args.difficulty, repo=args.repo)
+            instances = load_swebench(
+                args.n_instances, args.dataset, difficulty=args.difficulty, repo=args.repo
+            )
 
             def grader(instance, patches, tag="c"):
                 return grade_candidates(
-                    instance, patches, dataset_name=args.dataset, run_id=args.run_id,
-                    workers=args.harness_workers, namespace=args.namespace,
-                    work_dir=args.work_dir, tag=f"{instance['instance_id']}_{tag}",
+                    instance,
+                    patches,
+                    dataset_name=args.dataset,
+                    run_id=args.run_id,
+                    workers=args.harness_workers,
+                    namespace=args.namespace,
+                    work_dir=args.work_dir,
+                    tag=f"{instance['instance_id']}_{tag}",
                 )
 
             model_label = args.model
         except Exception as e:  # noqa: BLE001
-            print(f"Could not initialize SWE-bench experiment: {type(e).__name__}: {e}\n"
-                  "Install extras + swebench and configure Docker/AWS on the box:\n"
-                  "  ~/canopy/.venv/bin/pip install swebench datasets\n"
-                  "Smoke-test with no deps: --mock")
+            print(
+                f"Could not initialize SWE-bench experiment: {type(e).__name__}: {e}\n"
+                "Install extras + swebench and configure Docker/AWS on the box:\n"
+                "  ~/canopy/.venv/bin/pip install swebench datasets\n"
+                "Smoke-test with no deps: --mock"
+            )
             return
 
     budget = matched_budget(args.branching, args.depth)
@@ -375,11 +420,22 @@ def main() -> None:
     def checkpoint(pi):
         write_checkpoint(pi, budget, model_label, args.dataset, args.tag)
 
-    print(f"SWE-bench search: {len(instances)} instances, dataset {args.dataset}, "
-          f"model {model_label}, budget B*(D+1)={budget}")
+    print(
+        f"SWE-bench search: {len(instances)} instances, dataset {args.dataset}, "
+        f"model {model_label}, budget B*(D+1)={budget}"
+    )
     start = time.monotonic()
-    run_level(instances, generate, grader, args.branching, args.depth,
-              args.max_tokens, args.run_id, per_instance, checkpoint)
+    run_level(
+        instances,
+        generate,
+        grader,
+        args.branching,
+        args.depth,
+        args.max_tokens,
+        args.run_id,
+        per_instance,
+        checkpoint,
+    )
     _write_outputs(per_instance, budget, model_label, args.dataset, tag=args.tag)
     print(f"  ({(time.monotonic() - start) / 60:.1f}m elapsed)")
 

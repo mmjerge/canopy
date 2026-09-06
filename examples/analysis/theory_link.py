@@ -125,15 +125,19 @@ def estimate_near_optimality_dimension(leaf_means, branching, depth, rho, nu=2.0
 def sublinear_regret_curve():
     """Run HOO at growing horizons on a tree-Lipschitz tree; return regrets and the exponent."""
     lm = hierarchical_gaussian_leaf_means(
-        BRANCHING, DEPTH, geometric_sigma(0.40, 0.60), root_value=0.5,
+        BRANCHING,
+        DEPTH,
+        geometric_sigma(0.40, 0.60),
+        root_value=0.5,
         rng=np.random.default_rng(7),
     )
     spread = lipschitz_spread(SPREAD_L, SPREAD_RHO)
     regrets = np.zeros((len(HORIZONS), N_SEEDS))
     for j, n in enumerate(progress(HORIZONS, "sublinear-rate horizons", total=len(HORIZONS))):
         for s in range(N_SEEDS):
-            env = TreeBandit(BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1,
-                             rng=np.random.default_rng(1000 + s))
+            env = TreeBandit(
+                BRANCHING, DEPTH, leaf_means=lm, noise_std=0.1, rng=np.random.default_rng(1000 + s)
+            )
             regrets[j, s] = run_hoo(
                 env, n, spread, np.random.default_rng(1000 + s), memory_bounded=True
             ).final_regret
@@ -236,20 +240,26 @@ def load_routerbench_decomposition():
 def main() -> None:
     set_style()
     regrets, alpha, d_hat = sublinear_regret_curve()
-    print(f"tree-Lipschitz tree ({BRANCHING**DEPTH} leaves): measured regret exponent "
-          f"alpha={alpha:.3f} (<1 => average regret -> 0); estimated d={d_hat:.2f}")
+    print(
+        f"tree-Lipschitz tree ({BRANCHING**DEPTH} leaves): measured regret exponent "
+        f"alpha={alpha:.3f} (<1 => average regret -> 0); estimated d={d_hat:.2f}"
+    )
     avg = regrets / np.array(HORIZONS)[:, None]
-    print("  avg regret R(n)/n: " + "  ".join(
-        f"n={n}:{avg[j].mean():.3f}" for j, n in enumerate(HORIZONS)))
+    print(
+        "  avg regret R(n)/n: "
+        + "  ".join(f"n={n}:{avg[j].mean():.3f}" for j, n in enumerate(HORIZONS))
+    )
 
     rb = load_routerbench_decomposition()
     if rb is not None:
-        print(f"RouterBench ({rb['n_prompts']} prompts, {rb['n_categories']} categories, "
-              f"{rb['n_families']} families): family tree explains {rb['family_frac']:.1%} of "
-              f"Var(f), category {rb['category_frac']:.1%}; within-region (bandit noise) "
-              f"{1 - rb['category_frac']:.1%}; family tree explains "
-              f"{rb['region_value_family_frac']:.1%} of the region-value variance; "
-              f"per-region noise std {rb['noise_std']:.2f}")
+        print(
+            f"RouterBench ({rb['n_prompts']} prompts, {rb['n_categories']} categories, "
+            f"{rb['n_families']} families): family tree explains {rb['family_frac']:.1%} of "
+            f"Var(f), category {rb['category_frac']:.1%}; within-region (bandit noise) "
+            f"{1 - rb['category_frac']:.1%}; family tree explains "
+            f"{rb['region_value_family_frac']:.1%} of the region-value variance; "
+            f"per-region noise std {rb['noise_std']:.2f}"
+        )
     else:
         print("RouterBench unavailable (need --extra bench + network); skipping Panel B.")
 
@@ -267,8 +277,10 @@ def _plot(regrets, alpha, d_hat, rb) -> None:
     axA.set_xlabel("horizon $n$")
     axA.set_ylabel("average regret $R(n)/n$")
     axA.set_ylim(bottom=0)
-    axA.set_title(f"Average regret $\\to 0$ ($R(n)\\propto n^{{{alpha:.2f}}}$, "
-                  f"$\\hat d\\approx{d_hat:.1f}$)")
+    axA.set_title(
+        f"Average regret $\\to 0$ ($R(n)\\propto n^{{{alpha:.2f}}}$, "
+        f"$\\hat d\\approx{d_hat:.1f}$)"
+    )
     axA.legend(loc="upper right")
 
     # Panel B: RouterBench variance decomposition -- how much of the routing value the tree
@@ -279,25 +291,53 @@ def _plot(regrets, alpha, d_hat, rb) -> None:
         xs = [0, 1, 2, 3]
         cum = [0.0, fam, cat, 1.0]
         labels = ["root", "family", "category", "prompt\n(leaf)"]
-        axB.step(xs, cum, where="post", color=PALETTE["blue"], lw=2, marker="o",
-                 label="variance of $f$ explained by tree")
+        axB.step(
+            xs,
+            cum,
+            where="post",
+            color=PALETTE["blue"],
+            lw=2,
+            marker="o",
+            label="variance of $f$ explained by tree",
+        )
         axB.fill_between(xs, cum, 1.0, step="post", color=PALETTE["red"], alpha=0.12)
         axB.axhline(1.0, color=PALETTE["gray"], ls=":", lw=1)
-        axB.text(2.02, (cat + 1.0) / 2, "within-region\n(bandit noise)", color=PALETTE["red"],
-                 fontsize=8, va="center")
-        axB.annotate(f"{cat:.0%} regional signal", (2, cat), textcoords="offset points",
-                     xytext=(-4, -14), fontsize=8, color=PALETTE["blue"], ha="right")
+        axB.text(
+            2.02,
+            (cat + 1.0) / 2,
+            "within-region\n(bandit noise)",
+            color=PALETTE["red"],
+            fontsize=8,
+            va="center",
+        )
+        axB.annotate(
+            f"{cat:.0%} regional signal",
+            (2, cat),
+            textcoords="offset points",
+            xytext=(-4, -14),
+            fontsize=8,
+            color=PALETTE["blue"],
+            ha="right",
+        )
         axB.set_xticks(xs)
         axB.set_xticklabels(labels)
         axB.set_ylim(0, 1.05)
         axB.set_ylabel("cumulative fraction of $\\mathrm{Var}(f)$ explained")
         axB.set_xlabel("tree resolution")
-        axB.set_title(f"RouterBench: value is coarsely tree-structured\n(family tree explains "
-                      f"{float(rb['region_value_family_frac']):.0%} of region-value variance)")
+        axB.set_title(
+            f"RouterBench: value is coarsely tree-structured\n(family tree explains "
+            f"{float(rb['region_value_family_frac']):.0%} of region-value variance)"
+        )
         axB.legend(loc="center left", fontsize=8)
     else:
-        axB.text(0.5, 0.5, "RouterBench unavailable\n(need --extra bench + network)",
-                 ha="center", va="center", transform=axB.transAxes)
+        axB.text(
+            0.5,
+            0.5,
+            "RouterBench unavailable\n(need --extra bench + network)",
+            ha="center",
+            va="center",
+            transform=axB.transAxes,
+        )
         axB.set_axis_off()
 
     fig.suptitle("Theory link: sublinear regret, and a coarsely tree-structured routing value")
@@ -314,8 +354,10 @@ def _write_table(alpha, d_hat, rb) -> None:
         "\\midrule",
     ]
     if rb is not None:
+
         def pct(x):
             return f"{100 * float(x):.1f}\\%"
+
         rows += [
             f"RouterBench: Var($f$) explained by family tree & & {pct(rb['family_frac'])} \\\\",
             f"RouterBench: Var($f$) explained by category tree & & {pct(rb['category_frac'])} "
@@ -328,7 +370,8 @@ def _write_table(alpha, d_hat, rb) -> None:
         "% Theory link (auto-generated by theory_link.py)\n"
         "\\begin{tabular}{lcr}\n\\toprule\n"
         "Quantity & Statistic & Value \\\\\n\\midrule\n"
-        + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (FIGURE_DIR / "theory_link_table.tex").write_text(tex)
     print(f"wrote table to {FIGURE_DIR}/theory_link_table.tex")

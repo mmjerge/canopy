@@ -93,10 +93,12 @@ def t1_2_deconvolution() -> None:
     eta = sp.symbols("eta", real=True)
 
     # (i) Gaussian MGF, symbolically: integral of e^{lam eta} * N(0, sigma^2) deta
-    gauss = sp.exp(-eta**2 / (2 * sigma**2)) / (sigma * sp.sqrt(2 * sp.pi))
+    gauss = sp.exp(-(eta**2) / (2 * sigma**2)) / (sigma * sp.sqrt(2 * sp.pi))
     mgf = sp.simplify(sp.integrate(sp.exp(lam * eta) * gauss, (eta, -sp.oo, sp.oo)))
-    check("Gaussian MGF E e^{lam eta} = e^{lam^2 sigma^2/2} (symbolic integral)",
-          sp.simplify(mgf - sp.exp(lam**2 * sigma**2 / 2)) == 0)
+    check(
+        "Gaussian MGF E e^{lam eta} = e^{lam^2 sigma^2/2} (symbolic integral)",
+        sp.simplify(mgf - sp.exp(lam**2 * sigma**2 / 2)) == 0,
+    )
 
     # (ii) factorization under independence: E e^{lam(mu(L)+eta)} = E e^{lam mu(L)} E e^{lam eta}
     # for a discrete L (mixture) and independent eta -- check by direct expansion on a 3-leaf
@@ -104,17 +106,25 @@ def t1_2_deconvolution() -> None:
     mu1, mu2, mu3 = sp.symbols("mu1 mu2 mu3", real=True)
     lhs = sp.Rational(1, 3) * sum(
         sp.integrate(sp.exp(lam * (mu + eta)) * gauss, (eta, -sp.oo, sp.oo))
-        for mu in (mu1, mu2, mu3))
-    rhs = (sp.Rational(1, 3) * sum(sp.exp(lam * mu) for mu in (mu1, mu2, mu3))
-           * sp.exp(lam**2 * sigma**2 / 2))
-    check("factorization E e^{lam X} = M_mu(lam) * M_eta(lam) (symbolic, 3-leaf mixture)",
-          sp.simplify(lhs - rhs) == 0)
+        for mu in (mu1, mu2, mu3)
+    )
+    rhs = (
+        sp.Rational(1, 3)
+        * sum(sp.exp(lam * mu) for mu in (mu1, mu2, mu3))
+        * sp.exp(lam**2 * sigma**2 / 2)
+    )
+    check(
+        "factorization E e^{lam X} = M_mu(lam) * M_eta(lam) (symbolic, 3-leaf mixture)",
+        sp.simplify(lhs - rhs) == 0,
+    )
 
     # (iii) the rearrangement used by the certificate: M_mu = E e^{lam X} * e^{-lam^2 s^2/2}
     EX = sp.symbols("EX", positive=True)
     Mmu = EX * sp.exp(-(lam**2) * sigma**2 / 2)
-    check("rearrangement M_mu = E e^{lam X} e^{-lam^2 sigma^2/2}",
-          sp.simplify(Mmu * sp.exp(lam**2 * sigma**2 / 2) - EX) == 0)
+    check(
+        "rearrangement M_mu = E e^{lam X} e^{-lam^2 sigma^2/2}",
+        sp.simplify(Mmu * sp.exp(lam**2 * sigma**2 / 2) - EX) == 0,
+    )
 
 
 # ------------------------------------------------------------------ T1.3 assembly
@@ -125,11 +135,11 @@ def t1_3_assembly() -> None:
     worst = -np.inf
     for _ in range(20000):
         m = int(rng.integers(2, 40))
-        mu = rng.uniform(0, 1, size=m)             # leaf means in [0,1] as assumed
+        mu = rng.uniform(0, 1, size=m)  # leaf means in [0,1] as assumed
         sigma = float(rng.uniform(0.01, 0.5))
         lam = float(rng.uniform(0.1, 8.0))
         f_v = mu.mean()
-        B_true = mu.max() - f_v                     # the aggregation bias
+        B_true = mu.max() - f_v  # the aggregation bias
         E_expX = np.mean(np.exp(lam * mu)) * np.exp(lam**2 * sigma**2 / 2)  # exact E e^{lam X}
         # any valid upper confidence G_up >= E e^{lam X}, any valid lower conf f >= Xbar - eps:
         G_up = E_expX * float(rng.uniform(1.0, 3.0))
@@ -141,8 +151,7 @@ def t1_3_assembly() -> None:
         if gap > 1e-10:
             ok = False
             break
-    check("B(v) <= assembled bound on 20k exact random instances", ok,
-          f"max violation {worst:.2e}")
+    check("B(v) <= assembled bound on 20k exact random instances", ok, f"max violation {worst:.2e}")
 
 
 # ------------------------------------------------------------------ T1.4 sub-Gaussian rate
@@ -155,17 +164,20 @@ def t1_4_subgaussian_rate() -> None:
     lam_star = [s for s in lam_star if s.is_positive is not False]
     val = sp.simplify(expr.subs(lam, lam_star[0]))
     target = sw * sp.sqrt(2 * sp.log(m))
-    check("optimizer lam* = sqrt(2 log m)/sigma_w",
-          sp.simplify(lam_star[0] - sp.sqrt(2 * sp.log(m)) / sw) == 0)
+    check(
+        "optimizer lam* = sqrt(2 log m)/sigma_w",
+        sp.simplify(lam_star[0] - sp.sqrt(2 * sp.log(m)) / sw) == 0,
+    )
     check("optimal value = sigma_w sqrt(2 log m)", sp.simplify(val - target) == 0)
     # second derivative = 2 log(m) / lam^3, positive iff m > 1; the paper's m is a leaf count
     # >= branching >= 2, so encode m = 1 + q with q > 0 to give sympy the needed assumption.
     q = sp.symbols("q", positive=True)
     second = sp.simplify(sp.diff(expr, lam, 2))
-    check("second derivative = 2 log(m)/lam^3",
-          sp.simplify(second - 2 * sp.log(m) / lam**3) == 0)
-    check("second derivative > 0 for m >= 2 (a minimum)",
-          bool(sp.simplify(second.subs(m, 1 + q)).is_positive))
+    check("second derivative = 2 log(m)/lam^3", sp.simplify(second - 2 * sp.log(m) / lam**3) == 0)
+    check(
+        "second derivative > 0 for m >= 2 (a minimum)",
+        bool(sp.simplify(second.subs(m, 1 + q)).is_positive),
+    )
 
 
 # ------------------------------------------------------------------ T2.4 budget split
@@ -196,7 +208,7 @@ def t3_2_jump_cells() -> None:
             span = b ** (D - level)
             cells = set(int(x) // span for x in boundaries)
             total += len(cells)
-            if len(cells) > K:      # per-level count can never exceed K
+            if len(cells) > K:  # per-level count can never exceed K
                 ok = False
         if total > K * D:
             ok = False
@@ -206,8 +218,10 @@ def t3_2_jump_cells() -> None:
 
 
 def main() -> None:
-    print("Mechanical verification of the certificate algebra "
-          "(symbolic where exact, randomized where an inequality)\n")
+    print(
+        "Mechanical verification of the certificate algebra "
+        "(symbolic where exact, randomized where an inequality)\n"
+    )
     t1_1_logsumexp()
     t1_2_deconvolution()
     t1_3_assembly()
@@ -218,9 +232,11 @@ def main() -> None:
     if FAILURES:
         print(f"FAILED: {len(FAILURES)} check(s): {FAILURES}")
         sys.exit(1)
-    print("ALL CHECKS PASSED. Scope note: concentration steps (empirical Bernstein) and the "
-          "composed bandit analyses are cited results, NOT verified here; Theorems 2-3 are "
-          "proof sketches by design.")
+    print(
+        "ALL CHECKS PASSED. Scope note: concentration steps (empirical Bernstein) and the "
+        "composed bandit analyses are cited results, NOT verified here; Theorems 2-3 are "
+        "proof sketches by design."
+    )
 
 
 if __name__ == "__main__":

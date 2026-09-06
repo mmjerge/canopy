@@ -50,8 +50,15 @@ def load_cell(short: str, depth: int):
     bo = [v["bo"] for v in pi.values()]
     vg = [v["vg"] for v in pi.values()]
     delta, lo, hi = _paired_delta_ci(bo, vg, seed=depth)
-    return {"budget": d["level"]["matched_budget"], "delta": delta, "lo": lo, "hi": hi,
-            "n": len(bo), "bo": float(np.mean(bo)), "vg": float(np.mean(vg))}
+    return {
+        "budget": d["level"]["matched_budget"],
+        "delta": delta,
+        "lo": lo,
+        "hi": hi,
+        "n": len(bo),
+        "bo": float(np.mean(bo)),
+        "vg": float(np.mean(vg)),
+    }
 
 
 def main() -> None:
@@ -85,8 +92,10 @@ def main() -> None:
             sig = c["lo"] > 0 or c["hi"] < 0
             s = f"${c['delta']:+.3f}$ [{c['lo']:+.2f}, {c['hi']:+.2f}]"
             cells.append(f"\\textbf{{{s}}}" if sig else s)
-            print(f"  {label:18s} B={c['budget']:2d}: bo={c['bo']:.3f} vg={c['vg']:.3f} "
-                  f"delta={c['delta']:+.3f} [{c['lo']:+.2f},{c['hi']:+.2f}]")
+            print(
+                f"  {label:18s} B={c['budget']:2d}: bo={c['bo']:.3f} vg={c['vg']:.3f} "
+                f"delta={c['delta']:+.3f} [{c['lo']:+.2f},{c['hi']:+.2f}]"
+            )
         lines.append(f"{label} & " + " & ".join(cells) + " \\\\")
     header = "Model & " + " & ".join(f"$B={b}$" for b in budgets) + " \\\\"
     tex = (
@@ -95,7 +104,8 @@ def main() -> None:
         f"{n_ref} SWE-bench Verified '15 min - 1 hour' instances per cell; bold = CI excludes "
         "0.\n"
         f"\\begin{{tabular}}{{l{'c' * len(budgets)}}}\n\\toprule\n{header}\n\\midrule\n"
-        + "\n".join(lines) + "\n\\bottomrule\n\\end{tabular}\n"
+        + "\n".join(lines)
+        + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (FIGDIR / "swebench_sweep_table.tex").write_text(tex)
     print(f"\nwrote table to {FIGDIR}/swebench_sweep_table.tex")
@@ -113,8 +123,13 @@ def _plot(grid, budgets) -> None:
         print(f"(figure skipped: {type(e).__name__}: {e})")
         return
     set_style()
-    colors = [PALETTE["blue"], PALETTE["green"], PALETTE["orange"], PALETTE["purple"],
-              PALETTE["red"]]
+    colors = [
+        PALETTE["blue"],
+        PALETTE["green"],
+        PALETTE["orange"],
+        PALETTE["purple"],
+        PALETTE["red"],
+    ]
     fig, ax = plt.subplots(figsize=(6.8, 4.4))
     for (short, label), col in zip(MODELS, colors):
         xs, ys, los, his = [], [], [], []

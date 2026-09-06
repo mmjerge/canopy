@@ -153,7 +153,7 @@ def _bootstrap_ci(hits, iters=2000, seed=0):
 
 
 def _write_outputs(per_task: dict, model: str, quiet=False):
-    """per_task maps task_index(str) -> {'value_guided': {solved,reward,calls}, 'best_of_n': {...}}."""
+    """per_task maps task_index(str) -> {'value_guided': {...}, 'best_of_n': {...}}."""
     if not per_task:
         return
     FIGDIR.mkdir(parents=True, exist_ok=True)
@@ -207,8 +207,14 @@ def _plot(vg_m, vg_lo, vg_hi, bo_m, bo_lo, bo_hi, n, model):
     means = [bo_m, vg_m]
     lo = [bo_m - bo_lo, vg_m - vg_lo]
     hi = [bo_hi - bo_m, vg_hi - vg_m]
-    ax.bar(labels, means, yerr=[lo, hi], capsize=6,
-           color=[PALETTE["orange"], PALETTE["red"]], width=0.6)
+    ax.bar(
+        labels,
+        means,
+        yerr=[lo, hi],
+        capsize=6,
+        color=[PALETTE["orange"], PALETTE["red"]],
+        width=0.6,
+    )
     ax.set_ylabel("task success")
     ax.set_ylim(0, 1)
     ax.set_title(f"ALFWorld at matched compute ({n} tasks)")
@@ -242,8 +248,11 @@ def main() -> None:
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="examples/.cache/alfworld_search.jsonl")
     ap.add_argument("--checkpoint-every", type=int, default=5)
-    ap.add_argument("--resume", action="store_true",
-                    help="skip tasks already in paper/figures/alfworld_search_results.json")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="skip tasks already in paper/figures/alfworld_search_results.json",
+    )
     ap.add_argument("--mock", action="store_true", help="use a toy env + random policy, no deps")
     args = ap.parse_args()
 
@@ -273,7 +282,7 @@ def main() -> None:
             )
             return
         try:
-            from canopy.llm import BedrockClient, BudgetError, CachingLLMClient
+            from canopy.llm import BedrockClient, CachingLLMClient
 
             alfred, files = load_alfworld(args.config, args.split)
             client = CachingLLMClient(
@@ -297,8 +306,10 @@ def main() -> None:
             )
             return
 
-    print(f"ALFWorld {args.split if not args.mock else 'mock'}: {len(task_indices)} task(s), "
-          f"model {model_label}")
+    print(
+        f"ALFWorld {args.split if not args.mock else 'mock'}: {len(task_indices)} task(s), "
+        f"model {model_label}"
+    )
 
     per_task: dict[str, dict] = {}
     if args.resume:
@@ -312,6 +323,7 @@ def main() -> None:
     try:
         from canopy.llm import BudgetError
     except Exception:  # noqa: BLE001
+
         class BudgetError(Exception):
             pass
 
@@ -322,8 +334,12 @@ def main() -> None:
             env = ReplayCloneEnv(get_engine(ti))
             try:
                 res = compare_matched_budget_agent(
-                    env, act, branching=args.branching, rollouts=args.rollouts,
-                    rollout_horizon=rollout_horizon, max_steps=args.max_steps,
+                    env,
+                    act,
+                    branching=args.branching,
+                    rollouts=args.rollouts,
+                    rollout_horizon=rollout_horizon,
+                    max_steps=args.max_steps,
                 )
             except BudgetError as e:
                 print(f"[budget stop] {e}")

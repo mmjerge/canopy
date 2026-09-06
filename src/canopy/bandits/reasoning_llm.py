@@ -121,7 +121,7 @@ def normalize_math(s: str) -> str:
 
 
 def extract_boxed_answer(text: str) -> str | None:
-    """Extract a MATH final answer: prefer ``\\boxed{...}``, else after ``####``, else last number."""
+    """Extract a MATH answer: prefer ``\\boxed{...}``, else after ``####``, else last number."""
     boxed = _extract_boxed(text)
     if boxed is not None:
         return normalize_math(boxed)
@@ -301,11 +301,16 @@ def value_guided_search(
             val = value_fn(roll_texts)
             if trace_log is not None:
                 n_correct = sum(1 for t in roll_texts if grade_fn(extract_fn(t), gold))
-                step_records.append({
-                    "step": step, "candidate": c, "cheap_value": float(val),
-                    "true_value": n_correct / max(1, len(roll_texts)),
-                    "n_rollouts": len(roll_texts), "chosen": False,
-                })
+                step_records.append(
+                    {
+                        "step": step,
+                        "candidate": c,
+                        "cheap_value": float(val),
+                        "true_value": n_correct / max(1, len(roll_texts)),
+                        "n_rollouts": len(roll_texts),
+                        "chosen": False,
+                    }
+                )
             if val > best_val:
                 best_val, best_step = val, cand
                 best_c = c

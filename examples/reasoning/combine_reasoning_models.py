@@ -32,7 +32,7 @@ def _label(path: Path, bench: str, model: str) -> str:
     """Human label for a run: the filename tag if present, else a short form of the model id."""
     stem = path.name[: -len("_results.json")]
     prefix = f"reasoning_search_{bench}"
-    tag = stem[len(prefix):].lstrip("_")
+    tag = stem[len(prefix) :].lstrip("_")
     if tag:
         return tag
     return model.split(".")[-1].replace("-instruct", "").replace("-v1:0", "")[:18] or "headline"
@@ -44,7 +44,7 @@ def _max_budget_level(levels: dict) -> dict:
 
 
 def _paired_bootstrap(bo_hits, vg_hits, iters=4000, seed=0):
-    """Bootstrap over problems; return (bo_mean,bo_lo,bo_hi, vg_mean,vg_lo,vg_hi, d_mean,d_lo,d_hi)."""
+    """Bootstrap over problems; return (bo, bo_lo, bo_hi, vg, vg_lo, vg_hi, d, d_lo, d_hi)."""
     bo, vg = np.asarray(bo_hits, float), np.asarray(vg_hits, float)
     n = bo.size
     rng = np.random.default_rng(seed)
@@ -52,17 +52,26 @@ def _paired_bootstrap(bo_hits, vg_hits, iters=4000, seed=0):
     bo_s, vg_s = bo[idx].mean(1), vg[idx].mean(1)
     d_s = vg_s - bo_s
     q = lambda a: (float(np.percentile(a, 2.5)), float(np.percentile(a, 97.5)))  # noqa: E731
-    return (float(bo.mean()), *q(bo_s), float(vg.mean()), *q(vg_s),
-            float((vg - bo).mean()), *q(d_s))
+    return (
+        float(bo.mean()),
+        *q(bo_s),
+        float(vg.mean()),
+        *q(vg_s),
+        float((vg - bo).mean()),
+        *q(d_s),
+    )
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--benchmark", default="math")
-    ap.add_argument("--exclude", default="",
-                    help="comma-separated model labels to drop (e.g. models that did not follow "
-                         "the answer format on this benchmark, so their scores are "
-                         "extraction-confounded rather than a real capability measurement)")
+    ap.add_argument(
+        "--exclude",
+        default="",
+        help="comma-separated model labels to drop (e.g. models that did not follow "
+        "the answer format on this benchmark, so their scores are "
+        "extraction-confounded rather than a real capability measurement)",
+    )
     args = ap.parse_args()
     bench = args.benchmark
     exclude = {s.strip() for s in args.exclude.split(",") if s.strip()}
@@ -83,24 +92,39 @@ def main() -> None:
         if not bo_hits:
             continue
         stats = _paired_bootstrap(bo_hits, vg_hits)
-        rows.append({
-            "label": label,
-            "n": len(bo_hits), "budget": lv["matched_budget"],
-            "bo": stats[0], "bo_lo": stats[1], "bo_hi": stats[2],
-            "vg": stats[3], "vg_lo": stats[4], "vg_hi": stats[5],
-            "d": stats[6], "d_lo": stats[7], "d_hi": stats[8],
-        })
+        rows.append(
+            {
+                "label": label,
+                "n": len(bo_hits),
+                "budget": lv["matched_budget"],
+                "bo": stats[0],
+                "bo_lo": stats[1],
+                "bo_hi": stats[2],
+                "vg": stats[3],
+                "vg_lo": stats[4],
+                "vg_hi": stats[5],
+                "d": stats[6],
+                "d_lo": stats[7],
+                "d_hi": stats[8],
+            }
+        )
     if not rows:
-        print(f"No reasoning_search_{bench}*_results.json files found in {FIGURE_DIR}. "
-              "Run reasoning_search.py (headline + --tag runs) first.")
+        print(
+            f"No reasoning_search_{bench}*_results.json files found in {FIGURE_DIR}. "
+            "Run reasoning_search.py (headline + --tag runs) first."
+        )
         return
 
     rows.sort(key=lambda r: r["bo"])  # order by capability (best-of-N accuracy proxy)
-    print(f"{bench.upper()} across {len(rows)} models (largest-budget level, 95% CI over problems):")
+    print(
+        f"{bench.upper()} across {len(rows)} models (largest-budget level, 95% CI over problems):"
+    )
     for r in rows:
-        print(f"  {r['label']:20s} best-of-N={r['bo']:.3f} [{r['bo_lo']:.2f},{r['bo_hi']:.2f}]  "
-              f"value-guided={r['vg']:.3f} [{r['vg_lo']:.2f},{r['vg_hi']:.2f}]  "
-              f"Delta={r['d']:+.3f} [{r['d_lo']:+.2f},{r['d_hi']:+.2f}]")
+        print(
+            f"  {r['label']:20s} best-of-N={r['bo']:.3f} [{r['bo_lo']:.2f},{r['bo_hi']:.2f}]  "
+            f"value-guided={r['vg']:.3f} [{r['vg_lo']:.2f},{r['vg_hi']:.2f}]  "
+            f"Delta={r['d']:+.3f} [{r['d_lo']:+.2f},{r['d_hi']:+.2f}]"
+        )
 
     _write_table(rows, bench)
     _plot(rows, bench)
@@ -140,10 +164,18 @@ def _plot(rows, bench):
     d_err = np.array([[r["d"] - r["d_lo"] for r in rows], [r["d_hi"] - r["d"] for r in rows]])
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(12, 4.6))
-    axA.errorbar(x - 0.08, bo, yerr=bo_err, fmt="s", color=PALETTE["orange"], capsize=3,
-                 label="best-of-N")
-    axA.errorbar(x + 0.08, vg, yerr=vg_err, fmt="o", color=PALETTE["red"], capsize=3,
-                 label="value-guided (ours)")
+    axA.errorbar(
+        x - 0.08, bo, yerr=bo_err, fmt="s", color=PALETTE["orange"], capsize=3, label="best-of-N"
+    )
+    axA.errorbar(
+        x + 0.08,
+        vg,
+        yerr=vg_err,
+        fmt="o",
+        color=PALETTE["red"],
+        capsize=3,
+        label="value-guided (ours)",
+    )
     axA.set_xticks(x)
     axA.set_xticklabels(labels, rotation=30, ha="right")
     axA.set_ylabel(f"{bench.upper()} accuracy (largest budget)")
@@ -153,8 +185,9 @@ def _plot(rows, bench):
     axB.axhline(0.0, color=PALETTE["gray"], lw=1, ls="--")
     axB.errorbar(bo, d, yerr=d_err, fmt="o", color=PALETTE["blue"], capsize=3)
     for r in rows:
-        axB.annotate(r["label"], (r["bo"], r["d"]), fontsize=7, xytext=(4, 3),
-                     textcoords="offset points")
+        axB.annotate(
+            r["label"], (r["bo"], r["d"]), fontsize=7, xytext=(4, 3), textcoords="offset points"
+        )
     axB.set_xlabel("model capability (best-of-N accuracy)")
     axB.set_ylabel("value-guided gain $\\Delta$")
     axB.set_title("Gain vs. capability (theory: peaks mid-capability)")

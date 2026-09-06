@@ -62,17 +62,29 @@ from canopy.bandits import (  # noqa: E402
 )
 
 FIGDIR = Path(__file__).resolve().parents[2] / "paper" / "figures"
-EVALS = ["arc", "bbh", "gpqa", "gsm8k", "harness_truthfulqa_mc_0", "hellaswag", "ifeval",
-         "mmlu", "humaneval", "mbpp", "winogrande", "mt_bench"]
+EVALS = [
+    "arc",
+    "bbh",
+    "gpqa",
+    "gsm8k",
+    "harness_truthfulqa_mc_0",
+    "hellaswag",
+    "ifeval",
+    "mmlu",
+    "humaneval",
+    "mbpp",
+    "winogrande",
+    "mt_bench",
+]
 
 # tree / cost model (probes cheap, leaf evals expensive) -- shared with the synthetic study
-BRANCHING = 10                    # RouterEval hard pools are 10 / 100 / 1000 == 10^{1,2,3}
-DEPTH = 3                         # set from --pool-size in main() (10^DEPTH leaves)
-NOISE, PROBE_NOISE = 0.06, 0.06   # finite-sample evaluation noise (accuracies in [0,1])
+BRANCHING = 10  # RouterEval hard pools are 10 / 100 / 1000 == 10^{1,2,3}
+DEPTH = 3  # set from --pool-size in main() (10^DEPTH leaves)
+NOISE, PROBE_NOISE = 0.06, 0.06  # finite-sample evaluation noise (accuracies in [0,1])
 PROBE_COST, LEAF_COST = 0.05, 1.0
 BEAM = 30
-CERT_SAMPLES = 12                 # random-path probes per cell for the certificate pre-pass
-Z_SPREAD = 1.0                    # multiplier on the estimated expected max-minus-mean bound
+CERT_SAMPLES = 12  # random-path probes per cell for the certificate pre-pass
+Z_SPREAD = 1.0  # multiplier on the estimated expected max-minus-mean bound
 
 
 def cert_levels() -> list[int]:
@@ -97,9 +109,11 @@ def load_eval(z, name: str, size: int, group: str):
     obj = pickle.load(io.BytesIO(z.read(f"router_dataset/{name}_router_dataset.pkl")))
     node = obj["hard"][size][group]
     d = node["data"]
-    return (np.asarray(d["train_score"], float),
-            np.asarray(d["test_score"], float),
-            list(node["model"]))
+    return (
+        np.asarray(d["train_score"], float),
+        np.asarray(d["test_score"], float),
+        list(node["model"]),
+    )
 
 
 def similarity_order(train_score: np.ndarray) -> np.ndarray:
@@ -126,9 +140,13 @@ def similarity_order(train_score: np.ndarray) -> np.ndarray:
 
 def make_env(leaf_means: np.ndarray, seed: int) -> TreeBandit:
     return TreeBandit(
-        BRANCHING, DEPTH, leaf_means=leaf_means,
-        noise_std=NOISE, probe_noise_std=PROBE_NOISE,
-        leaf_cost=LEAF_COST, probe_cost=PROBE_COST,
+        BRANCHING,
+        DEPTH,
+        leaf_means=leaf_means,
+        noise_std=NOISE,
+        probe_noise_std=PROBE_NOISE,
+        leaf_cost=LEAF_COST,
+        probe_cost=PROBE_COST,
         rng=np.random.default_rng(seed),
     )
 
@@ -175,8 +193,11 @@ def run_methods(leaf_means: np.ndarray, k: int, budget: float, seed: int):
     spread, relaxed, cert_cost = estimate_certificate(leaf_means, 5000 + seed)
     e = make_env(leaf_means, seed)
     remaining = max(BRANCHING * LEAF_COST, budget - cert_cost)
-    hier = (HierarchicalTopK(remaining, spread=spread, beam_width=BEAM, relaxed_ranges=relaxed)
-            .run(e, k).evaluate(e, k))
+    hier = (
+        HierarchicalTopK(remaining, spread=spread, beam_width=BEAM, relaxed_ranges=relaxed)
+        .run(e, k)
+        .evaluate(e, k)
+    )
 
     e = make_env(leaf_means, seed)
     se = SuccessiveEliminationTopK(budget).run(e, k).evaluate(e, k)
@@ -189,12 +210,12 @@ def run_methods(leaf_means: np.ndarray, k: int, budget: float, seed: int):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pool-size", type=int, default=1000, choices=[10, 100, 1000])
-    ap.add_argument("--group", default="strong_to_weak",
-                    choices=["all_strong", "all_weak", "strong_to_weak"])
+    ap.add_argument(
+        "--group", default="strong_to_weak", choices=["all_strong", "all_weak", "strong_to_weak"]
+    )
     ap.add_argument("--k", type=int, default=10, help="top-k models to identify")
     ap.add_argument("--seeds", type=int, default=20)
-    ap.add_argument("--budgets", type=float, nargs="+",
-                    default=[150, 300, 600, 1200, 2400])
+    ap.add_argument("--budgets", type=float, nargs="+", default=[150, 300, 600, 1200, 2400])
     ap.add_argument("--evals", nargs="+", default=None, help="subset of evals (default: all)")
     ap.add_argument("--plot", action="store_true")
     args = ap.parse_args()
@@ -203,8 +224,10 @@ def main() -> None:
     DEPTH = round(np.log(args.pool_size) / np.log(BRANCHING))  # 10/100/1000 -> depth 1/2/3
     n_leaves = BRANCHING**DEPTH
     if args.pool_size != n_leaves:
-        print(f"note: tree has {n_leaves} leaves; --pool-size {args.pool_size} will be "
-              f"padded/truncated to {n_leaves}.")
+        print(
+            f"note: tree has {n_leaves} leaves; --pool-size {args.pool_size} will be "
+            f"padded/truncated to {n_leaves}."
+        )
 
     try:
         z = _load_zip()
@@ -237,9 +260,11 @@ def main() -> None:
         print("No usable evaluations.")
         return
 
-    print(f"\nRouterEval top-k identification: pool={args.pool_size} ({args.group}), "
-          f"tree {BRANCHING}^{DEPTH}={n_leaves} leaves, top-{args.k}, "
-          f"{len(trees)} evals x {args.seeds} seeds, probe/leaf={PROBE_COST}")
+    print(
+        f"\nRouterEval top-k identification: pool={args.pool_size} ({args.group}), "
+        f"tree {BRANCHING}^{DEPTH}={n_leaves} leaves, top-{args.k}, "
+        f"{len(trees)} evals x {args.seeds} seeds, probe/leaf={PROBE_COST}"
+    )
     print(f"\n{'budget':>7s} {'Hierarchical(ours)':>19s} {'SuccessiveElim':>15s} {'Uniform':>9s}")
 
     labels = ["Hierarchical (ours)", "Successive elimination", "Uniform"]
@@ -292,7 +317,8 @@ def _write_table(args, evals, rows, labels, suffix="") -> None:
         f"{args.pool_size} ({args.group}); tree {BRANCHING}^{DEPTH}; probe/leaf cost "
         f"{PROBE_COST}. 'ours' cost includes the certificate probing pre-pass.\n"
         f"\\begin{{tabular}}{{{col}}}\n\\toprule\n{header}\n\\midrule\n"
-        + "\n".join(lines) + "\n\\bottomrule\n\\end{tabular}\n"
+        + "\n".join(lines)
+        + "\n\\bottomrule\n\\end{tabular}\n"
     )
     fname = f"real_topk_identification{suffix}_table.tex"
     (FIGDIR / fname).write_text(tex)

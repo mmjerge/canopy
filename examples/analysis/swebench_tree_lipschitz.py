@@ -39,7 +39,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve()
-sys.path.insert(0, str(HERE.parents[1]))            # examples/
+sys.path.insert(0, str(HERE.parents[1]))  # examples/
 sys.path.insert(0, str(HERE.parents[1] / "reasoning"))
 
 from canopy.bandits.swebench_eval import (  # noqa: E402
@@ -80,7 +80,7 @@ def _rankdata(a):
         j = i
         while j + 1 < len(a) and sorted_a[j + 1] == sorted_a[i]:
             j += 1
-        ranks[order[i:j + 1]] = (i + j) / 2.0
+        ranks[order[i : j + 1]] = (i + j) / 2.0
         i = j + 1
     return ranks
 
@@ -107,8 +107,9 @@ def measure_instance(inst, generate, grader, branching, depth, max_tokens):
     """
     files = inst.get("_files", {})
     files_str = format_files(files)
-    solve = SWEBENCH_PROMPTS[0].format(repo=inst["repo"], q=inst["problem_statement"],
-                                       files=files_str)
+    solve = SWEBENCH_PROMPTS[0].format(
+        repo=inst["repo"], q=inst["problem_statement"], files=files_str
+    )
     cheap_all, true_all, spreads, edge_hits = [], [], [], []
 
     # round 0: B fresh candidates
@@ -127,11 +128,16 @@ def measure_instance(inst, generate, grader, branching, depth, max_tokens):
     for step in range(1, depth + 1):
         feedback = failing_f2p_feedback(best_out)
         refine = SWEBENCH_PROMPTS[1].format(
-            repo=inst["repo"], q=inst["problem_statement"], files=files_str,
-            prefix=best_patch or "(empty patch)", feedback=feedback,
+            repo=inst["repo"],
+            q=inst["problem_statement"],
+            files=files_str,
+            prefix=best_patch or "(empty patch)",
+            feedback=feedback,
         )
-        cand = [build_patch(generate(refine, max_tokens, 1000 * step + c), files)
-                for c in range(branching)]
+        cand = [
+            build_patch(generate(refine, max_tokens, 1000 * step + c), files)
+            for c in range(branching)
+        ]
         couts = grader(inst, cand, tag=f"lip{step}")
         ccv = [cheap_value(o) for o in couts]
         ctv = [float(is_resolved(o)) for o in couts]
@@ -154,8 +160,9 @@ def _load_instances(n, dataset, difficulty, repo):
     return load_swebench(n, dataset, difficulty=difficulty, repo=repo)
 
 
-def characterize(instances, generate, grader, branching, depth, max_tokens, per_instance,
-                 checkpoint):
+def characterize(
+    instances, generate, grader, branching, depth, max_tokens, per_instance, checkpoint
+):
     """Measure the tree structure over instances (checkpointed per instance for resume)."""
     bar = tqdm(total=len(instances), unit="inst", desc="swe-tree") if tqdm else None
     for inst in instances:
@@ -166,7 +173,8 @@ def characterize(instances, generate, grader, branching, depth, max_tokens, per_
             continue
         if inst.get("base_commit") and "_files" not in inst:
             inst["_files"] = fetch_oracle_files(
-                inst["repo"], inst["base_commit"], patched_paths(inst.get("patch", "")))
+                inst["repo"], inst["base_commit"], patched_paths(inst.get("patch", ""))
+            )
         try:
             rec = measure_instance(inst, generate, grader, branching, depth, max_tokens)
         except Exception as e:  # noqa: BLE001
@@ -195,13 +203,20 @@ def _aggregate(per_instance, tau):
     n_piv = int(pivotal.sum())
     piv_m, piv_lo, piv_hi = _bootstrap_ci(edge_hits[pivotal]) if n_piv else (float("nan"),) * 3
     return {
-        "cheap": cheap, "true": true, "spreads": spreads.tolist(),
-        "spearman": _spearman(cheap, true), "pearson": _pearson(cheap, true),
+        "cheap": cheap,
+        "true": true,
+        "spreads": spreads.tolist(),
+        "spearman": _spearman(cheap, true),
+        "pearson": _pearson(cheap, true),
         "edge_hit_rate": float(edge_hits.mean()) if edge_hits.size else 0.0,
-        "edge_hit_pivotal": piv_m, "edge_hit_pivotal_lo": piv_lo, "edge_hit_pivotal_hi": piv_hi,
-        "n_pivotal": n_piv, "n_steps_total": int(spreads.size),
+        "edge_hit_pivotal": piv_m,
+        "edge_hit_pivotal_lo": piv_lo,
+        "edge_hit_pivotal_hi": piv_hi,
+        "n_pivotal": n_piv,
+        "n_steps_total": int(spreads.size),
         "K_by_tau": {t: float(np.mean(spreads > t)) if spreads.size else 0.0 for t in TAU_SWEEP},
-        "tau": tau, "n_candidates": len(cheap),
+        "tau": tau,
+        "n_candidates": len(cheap),
     }
 
 
@@ -209,9 +224,16 @@ def _write_outputs(agg, model, dataset, n_instances, branching, depth):
     FIGDIR.mkdir(parents=True, exist_ok=True)
     base = 1.0 / max(2, branching)
     agg_summary = {k: v for k, v in agg.items() if k not in ("cheap", "true")}
-    payload = {"benchmark": "swebench", "dataset": dataset, "model": model,
-               "n_instances": n_instances, "branching": branching, "depth": depth,
-               "random_edge_hit_rate": base, **agg_summary}
+    payload = {
+        "benchmark": "swebench",
+        "dataset": dataset,
+        "model": model,
+        "n_instances": n_instances,
+        "branching": branching,
+        "depth": depth,
+        "random_edge_hit_rate": base,
+        **agg_summary,
+    }
     (FIGDIR / "swebench_tree_lipschitz_results.json").write_text(json.dumps(payload, indent=2))
     ktau = "; ".join(f"$\\tau{{=}}{t}$: {100 * v:.0f}\\%" for t, v in agg["K_by_tau"].items())
     tex = (
@@ -230,14 +252,22 @@ def _write_outputs(agg, model, dataset, n_instances, branching, depth):
         "\\bottomrule\n\\end{tabular}\n"
     )
     (FIGDIR / "swebench_tree_lipschitz_table.tex").write_text(tex)
-    print(f"\nSWE-bench tree-Lipschitz ({dataset}, {n_instances} instances, "
-          f"{agg['n_candidates']} candidate patches), model {model}")
-    print(f"  cheap-vs-true resolved: Spearman rho={agg['spearman']:.3f}, "
-          f"Pearson r={agg['pearson']:.3f}")
-    print(f"  edge-hit rate={agg['edge_hit_rate']:.3f} (chance {base:.2f}); "
-          f"pivotal edge-hit={agg['edge_hit_pivotal']:.3f} (n={agg['n_pivotal']})")
-    print("  pivotal-step fraction: "
-          + ", ".join(f"tau={t}:{100 * v:.0f}%" for t, v in agg["K_by_tau"].items()))
+    print(
+        f"\nSWE-bench tree-Lipschitz ({dataset}, {n_instances} instances, "
+        f"{agg['n_candidates']} candidate patches), model {model}"
+    )
+    print(
+        f"  cheap-vs-true resolved: Spearman rho={agg['spearman']:.3f}, "
+        f"Pearson r={agg['pearson']:.3f}"
+    )
+    print(
+        f"  edge-hit rate={agg['edge_hit_rate']:.3f} (chance {base:.2f}); "
+        f"pivotal edge-hit={agg['edge_hit_pivotal']:.3f} (n={agg['n_pivotal']})"
+    )
+    print(
+        "  pivotal-step fraction: "
+        + ", ".join(f"tau={t}:{100 * v:.0f}%" for t, v in agg["K_by_tau"].items())
+    )
     try:
         _plot(agg, model, dataset, n_instances)
     except Exception as e:  # noqa: BLE001
@@ -271,8 +301,10 @@ def _plot(agg, model, dataset, n_instances):
     axB.set_xlabel("sibling true-value spread per refinement step (max $-$ min)")
     axB.set_ylabel("number of steps")
     axB.set_title("Most steps smooth; few are pivotal (violations)")
-    fig.suptitle(f"Repository-level code value function: informative edge + few violations "
-                 f"({n_instances} SWE-bench issues)")
+    fig.suptitle(
+        f"Repository-level code value function: informative edge + few violations "
+        f"({n_instances} SWE-bench issues)"
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     save_figure(fig, "swebench_tree_lipschitz")
 
@@ -322,15 +354,22 @@ def main() -> None:
 
             def grader(instance, patches, tag="c"):
                 return grade_candidates(
-                    instance, patches, dataset_name=args.dataset, run_id=args.run_id,
-                    workers=args.harness_workers, namespace=args.namespace,
-                    work_dir=args.work_dir, tag=f"{instance['instance_id']}_{tag}",
+                    instance,
+                    patches,
+                    dataset_name=args.dataset,
+                    run_id=args.run_id,
+                    workers=args.harness_workers,
+                    namespace=args.namespace,
+                    work_dir=args.work_dir,
+                    tag=f"{instance['instance_id']}_{tag}",
                 )
 
             model_label = args.model
         except Exception as e:  # noqa: BLE001
-            print(f"Could not initialize SWE-bench characterization: {type(e).__name__}: {e}\n"
-                  "  ~/canopy/.venv/bin/pip install swebench datasets ; --mock to smoke-test")
+            print(
+                f"Could not initialize SWE-bench characterization: {type(e).__name__}: {e}\n"
+                "  ~/canopy/.venv/bin/pip install swebench datasets ; --mock to smoke-test"
+            )
             return
 
     results_path = FIGDIR / "swebench_tree_lipschitz_results.json"
@@ -346,16 +385,27 @@ def main() -> None:
         results_path.parent.mkdir(parents=True, exist_ok=True)
         results_path.write_text(json.dumps({"per_instance": pi}, indent=2))
 
-    print(f"SWE-bench tree-Lipschitz: {len(instances)} instances, model {model_label}, "
-          f"branching {args.branching}, depth {args.depth}")
-    characterize(instances, generate, grader, args.branching, args.depth, args.max_tokens,
-                 per_instance, checkpoint)
+    print(
+        f"SWE-bench tree-Lipschitz: {len(instances)} instances, model {model_label}, "
+        f"branching {args.branching}, depth {args.depth}"
+    )
+    characterize(
+        instances,
+        generate,
+        grader,
+        args.branching,
+        args.depth,
+        args.max_tokens,
+        per_instance,
+        checkpoint,
+    )
     if per_instance:
         agg = _aggregate(per_instance, args.tau)
         # preserve raw records alongside the aggregate for resume/reproducibility
         payload = json.loads(results_path.read_text()) if results_path.exists() else {}
-        _write_outputs(agg, model_label, args.dataset, len(per_instance), args.branching,
-                       args.depth)
+        _write_outputs(
+            agg, model_label, args.dataset, len(per_instance), args.branching, args.depth
+        )
         merged = json.loads(results_path.read_text())
         merged["per_instance"] = per_instance
         results_path.write_text(json.dumps(merged, indent=2))

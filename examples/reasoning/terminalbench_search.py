@@ -88,7 +88,8 @@ def value_guided_tb(task, generate, grader, branching, depth, max_tokens):
 
     for step in range(1, depth + 1):
         refine = TERMINALBENCH_PROMPTS[1].format(
-            q=task["instruction"], prefix=best_script or "(empty)",
+            q=task["instruction"],
+            prefix=best_script or "(empty)",
             feedback=test_feedback(best_outcome),
         )
         cand = []
@@ -164,9 +165,16 @@ def _stem(tag):
 def write_checkpoint(per_task, budget, model, dataset, tag):
     FIGDIR.mkdir(parents=True, exist_ok=True)
     (FIGDIR / f"{_stem(tag)}_results.json").write_text(
-        json.dumps({"benchmark": tag, "dataset": dataset, "model": model,
-                    "n_tasks": len(per_task),
-                    "level": {"matched_budget": budget, "per_task": per_task}}, indent=2)
+        json.dumps(
+            {
+                "benchmark": tag,
+                "dataset": dataset,
+                "model": model,
+                "n_tasks": len(per_task),
+                "level": {"matched_budget": budget, "per_task": per_task},
+            },
+            indent=2,
+        )
     )
 
 
@@ -191,9 +199,11 @@ def _write_outputs(per_task, budget, model, dataset, tag="terminalbench"):
     )
     (FIGDIR / f"{_stem(tag)}_table.tex").write_text(tex)
     print(f"\nTerminal-Bench ({dataset}, {len(per_task)} tasks), model {model}")
-    print(f"  budget {b}: best-of-N resolved={bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}]  "
-          f"value-guided resolved={vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}]  "
-          f"delta={d_m:+.3f} [{d_lo:+.2f},{d_hi:+.2f}]")
+    print(
+        f"  budget {b}: best-of-N resolved={bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}]  "
+        f"value-guided resolved={vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}]  "
+        f"delta={d_m:+.3f} [{d_lo:+.2f},{d_hi:+.2f}]"
+    )
 
 
 def make_mock_generate(seed: int = 0):
@@ -209,15 +219,22 @@ def make_mock_generate(seed: int = 0):
 
 
 def load_mock_tasks(n: int):
-    return [{"task_id": f"mock-task-{i}",
-             "instruction": f"Mock task #{i}: create a file and populate it correctly."}
-            for i in range(n)]
+    return [
+        {
+            "task_id": f"mock-task-{i}",
+            "instruction": f"Mock task #{i}: create a file and populate it correctly.",
+        }
+        for i in range(n)
+    ]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tasks-dir", default="examples/.cache/terminalbench/tb21/tasks",
-                    help="local tasks directory (a terminal-bench 2.x git clone's tasks/)")
+    ap.add_argument(
+        "--tasks-dir",
+        default="examples/.cache/terminalbench/tb21/tasks",
+        help="local tasks directory (a terminal-bench 2.x git clone's tasks/)",
+    )
     ap.add_argument("--n-tasks", type=int, default=20)
     ap.add_argument("--model", default="bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0")
     ap.add_argument("--region", default="us-east-1")
@@ -230,8 +247,9 @@ def main() -> None:
     ap.add_argument("--tag", default="terminalbench")
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--resume", action="store_true")
-    ap.add_argument("--mock", action="store_true",
-                    help="deterministic mock model+grader, no Harbor")
+    ap.add_argument(
+        "--mock", action="store_true", help="deterministic mock model+grader, no Harbor"
+    )
     args = ap.parse_args()
 
     if args.mock:
@@ -257,23 +275,31 @@ def main() -> None:
             generate = as_generate_fn(client, gen_model, temperature=0.7)
             tasks = load_terminalbench_tasks(args.n_tasks, args.tasks_dir)
             if not tasks:
-                print(f"No tasks found under {args.tasks_dir} -- clone a terminal-bench 2.x "
-                      "repo there, e.g.\n  git clone --depth 1 "
-                      "https://github.com/harbor-framework/terminal-bench-2-1 "
-                      "examples/.cache/terminalbench/tb21")
+                print(
+                    f"No tasks found under {args.tasks_dir} -- clone a terminal-bench 2.x "
+                    "repo there, e.g.\n  git clone --depth 1 "
+                    "https://github.com/harbor-framework/terminal-bench-2-1 "
+                    "examples/.cache/terminalbench/tb21"
+                )
                 return
 
             def grader(task, scripts, tag="c"):
                 return grade_candidates(
-                    task, scripts, jobs_dir=args.jobs_dir, harbor_bin=args.harbor_bin,
-                    timeout=args.timeout, tag=tag,
+                    task,
+                    scripts,
+                    jobs_dir=args.jobs_dir,
+                    harbor_bin=args.harbor_bin,
+                    timeout=args.timeout,
+                    tag=tag,
                 )
 
             model_label = args.model
         except Exception as e:  # noqa: BLE001
-            print(f"Could not initialize Terminal-Bench experiment: {type(e).__name__}: {e}\n"
-                  "Run in ~/harbor-venv (Python 3.12) with harbor + terminal-bench + canopy "
-                  "installed and Docker running. Smoke-test with no deps: --mock")
+            print(
+                f"Could not initialize Terminal-Bench experiment: {type(e).__name__}: {e}\n"
+                "Run in ~/harbor-venv (Python 3.12) with harbor + terminal-bench + canopy "
+                "installed and Docker running. Smoke-test with no deps: --mock"
+            )
             return
 
     budget = matched_budget(args.branching, args.depth)
@@ -290,11 +316,14 @@ def main() -> None:
     def checkpoint(pt):
         write_checkpoint(pt, budget, model_label, dataset_label, args.tag)
 
-    print(f"Terminal-Bench search: {len(tasks)} tasks from {dataset_label}, "
-          f"model {model_label}, budget B*(D+1)={budget}")
+    print(
+        f"Terminal-Bench search: {len(tasks)} tasks from {dataset_label}, "
+        f"model {model_label}, budget B*(D+1)={budget}"
+    )
     start = time.monotonic()
-    run_level(tasks, generate, grader, args.branching, args.depth, args.max_tokens,
-              per_task, checkpoint)
+    run_level(
+        tasks, generate, grader, args.branching, args.depth, args.max_tokens, per_task, checkpoint
+    )
     _write_outputs(per_task, budget, model_label, dataset_label, tag=args.tag)
     print(f"  ({(time.monotonic() - start) / 60:.1f}m elapsed)")
 

@@ -135,7 +135,7 @@ def load_humaneval(n: int):
 
 
 def load_mbpp(n: int):
-    """MBPP: write a function passing a list of asserts. Cheap probe = first assert; hidden = all."""
+    """MBPP: write a function passing a list of asserts. Probe = first assert; hidden = all."""
     from datasets import load_dataset
 
     # newer datasets versions require the namespaced repo id (bare "mbpp" no longer resolves)
@@ -145,7 +145,8 @@ def load_mbpp(n: int):
         tests = list(row["test_list"])
         prompt = (
             f"{row['text']}\n\nYour function must pass this test:\n{tests[0]}"
-            if tests else row["text"]
+            if tests
+            else row["text"]
         )
         gold = {
             "code_prefix": "",
@@ -223,21 +224,60 @@ def load_gpqa_diamond(n: int):
 # Per-benchmark spec: how to load, extract an answer, grade the leaf, which prompts to use, and
 # (for code) a per-problem cheap-value factory + a public-test selector shared by both strategies.
 BENCHMARKS = {
-    "math": dict(loader=load_math, extract=extract_boxed_answer, grade=grade_math,
-                 prompts=MATH_PROMPTS, value_factory=None, select=None, depth_sweep="2,4,6,8,10"),
-    "gsm8k": dict(loader=load_gsm8k, extract=extract_answer, grade=_grade_numeric,
-                  prompts=MATH_PROMPTS, value_factory=None, select=None, depth_sweep="2,3,4,5"),
-    "humaneval": dict(loader=load_humaneval, extract=extract_code, grade=grade_code,
-                      prompts=CODE_PROMPTS, value_factory=_code_value_factory,
-                      select=select_by_public_tests, depth_sweep="2,3,4"),
-    "mbpp": dict(loader=load_mbpp, extract=extract_code, grade=grade_code,
-                 prompts=CODE_PROMPTS, value_factory=_code_value_factory,
-                 select=select_by_public_tests, depth_sweep="2,3,4"),
-    "gpqa": dict(loader=load_gpqa_main, extract=parse_choice, grade=_grade_choice,
-                 prompts=MATH_PROMPTS, value_factory=None, select=None, depth_sweep="2,4,6,8"),
-    "gpqa_diamond": dict(loader=load_gpqa_diamond, extract=parse_choice, grade=_grade_choice,
-                         prompts=MATH_PROMPTS, value_factory=None, select=None,
-                         depth_sweep="2,4,6,8"),
+    "math": dict(
+        loader=load_math,
+        extract=extract_boxed_answer,
+        grade=grade_math,
+        prompts=MATH_PROMPTS,
+        value_factory=None,
+        select=None,
+        depth_sweep="2,4,6,8,10",
+    ),
+    "gsm8k": dict(
+        loader=load_gsm8k,
+        extract=extract_answer,
+        grade=_grade_numeric,
+        prompts=MATH_PROMPTS,
+        value_factory=None,
+        select=None,
+        depth_sweep="2,3,4,5",
+    ),
+    "humaneval": dict(
+        loader=load_humaneval,
+        extract=extract_code,
+        grade=grade_code,
+        prompts=CODE_PROMPTS,
+        value_factory=_code_value_factory,
+        select=select_by_public_tests,
+        depth_sweep="2,3,4",
+    ),
+    "mbpp": dict(
+        loader=load_mbpp,
+        extract=extract_code,
+        grade=grade_code,
+        prompts=CODE_PROMPTS,
+        value_factory=_code_value_factory,
+        select=select_by_public_tests,
+        depth_sweep="2,3,4",
+    ),
+    "gpqa": dict(
+        loader=load_gpqa_main,
+        extract=parse_choice,
+        grade=_grade_choice,
+        prompts=MATH_PROMPTS,
+        value_factory=None,
+        select=None,
+        depth_sweep="2,4,6,8",
+    ),
+    "gpqa_diamond": dict(
+        loader=load_gpqa_diamond,
+        extract=parse_choice,
+        grade=_grade_choice,
+        prompts=MATH_PROMPTS,
+        value_factory=None,
+        select=None,
+        depth_sweep="2,4,6,8",
+    ),
 }
 
 
@@ -270,11 +310,23 @@ def make_mock_generate(seed: int = 0):
 
 
 def load_mock_problems(n: int):
-    return [(f"Mock problem number {i}: what is {i} plus {i}?", str((2 * i) % 100)) for i in range(n)]
+    return [
+        (f"Mock problem number {i}: what is {i} plus {i}?", str((2 * i) % 100)) for i in range(n)
+    ]
 
 
-def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, workers=8,
-              prompts=MATH_PROMPTS, value_factory=None, select=None):
+def run_level(
+    problems,
+    generate,
+    cfg,
+    extract_fn,
+    grade_fn,
+    budget_error,
+    workers=8,
+    prompts=MATH_PROMPTS,
+    value_factory=None,
+    select=None,
+):
     """Run both strategies over all problems at one budget level; return per-problem 0/1 lists.
 
     Problems are independent, so they run on a thread pool (``workers``); the model calls are
@@ -291,12 +343,29 @@ def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, worke
 
     def _one(q, gold):
         value_fn = value_factory(gold) if value_factory is not None else None
-        bo = best_of_n(q, gold, generate, n=bo_n, extract_fn=extract_fn, grade_fn=grade_fn,
-                       prompts=prompts, select_fn=select)
+        bo = best_of_n(
+            q,
+            gold,
+            generate,
+            n=bo_n,
+            extract_fn=extract_fn,
+            grade_fn=grade_fn,
+            prompts=prompts,
+            select_fn=select,
+        )
         vg = value_guided_search(
-            q, gold, generate, branching=branching, n_steps=n_steps, rollouts=rollouts,
-            final_rollouts=final_rollouts, extract_fn=extract_fn, grade_fn=grade_fn,
-            value_fn=value_fn, prompts=prompts, select_fn=select,
+            q,
+            gold,
+            generate,
+            branching=branching,
+            n_steps=n_steps,
+            rollouts=rollouts,
+            final_rollouts=final_rollouts,
+            extract_fn=extract_fn,
+            grade_fn=grade_fn,
+            value_fn=value_fn,
+            prompts=prompts,
+            select_fn=select,
         )
         return int(bo.correct), int(vg.correct), bo.budget.calls, vg.budget.calls
 
@@ -314,13 +383,16 @@ def run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error, worke
                 hit_budget = e
                 continue
             except Exception as e:  # noqa: BLE001 -- a problem that failed even after client
-                skipped += 1                       # retries: drop it rather than crash the level
+                skipped += 1  # retries: drop it rather than crash the level
                 if skipped <= 3:
                     print(f"  [skip problem] {type(e).__name__}: {str(e)[:100]}")
                 if bar is not None:
                     bar.update(1)
                 continue
-            bo_hits.append(bc); vg_hits.append(vc); bo_calls += bca; vg_calls += vca
+            bo_hits.append(bc)
+            vg_hits.append(vc)
+            bo_calls += bca
+            vg_calls += vca
             if bar is not None:
                 bar.update(1)
     if bar is not None:
@@ -378,8 +450,10 @@ def _write_outputs(results, model, bench, n_problems, quiet=False, tag=""):
     FIGDIR.mkdir(parents=True, exist_ok=True)
     stem = _stem(bench, tag)
     (FIGDIR / f"{stem}_results.json").write_text(
-        json.dumps({"benchmark": bench, "model": model, "n_problems": n_problems,
-                    "levels": results}, indent=2)
+        json.dumps(
+            {"benchmark": bench, "model": model, "n_problems": n_problems, "levels": results},
+            indent=2,
+        )
     )
 
     levels = sorted(results.values(), key=lambda r: r["matched_budget"])
@@ -388,7 +462,9 @@ def _write_outputs(results, model, bench, n_problems, quiet=False, tag=""):
         b = r["matched_budget"]
         bo_m, bo_lo, bo_hi = _bootstrap_ci(r["best_of_n"]["hits"], seed=b)
         vg_m, vg_lo, vg_hi = _bootstrap_ci(r["value_guided"]["hits"], seed=b + 1)
-        d_m, d_lo, d_hi = _paired_delta_ci(r["best_of_n"]["hits"], r["value_guided"]["hits"], seed=b)
+        d_m, d_lo, d_hi = _paired_delta_ci(
+            r["best_of_n"]["hits"], r["value_guided"]["hits"], seed=b
+        )
         rows.append(
             f"{b} & {bo_m:.3f} [{bo_lo:.2f}, {bo_hi:.2f}] & "
             f"{vg_m:.3f} [{vg_lo:.2f}, {vg_hi:.2f}] & "
@@ -399,7 +475,8 @@ def _write_outputs(results, model, bench, n_problems, quiet=False, tag=""):
         "Delta is the paired (same-problem) gap with a 95% bootstrap CI.\n"
         "\\begin{tabular}{rccc}\n\\toprule\n"
         "Budget (calls) & best-of-N acc [95\\% CI] & value-guided acc [95\\% CI] "
-        "& $\\Delta$ (paired) [95\\% CI] \\\\\n\\midrule\n" + "\n".join(rows)
+        "& $\\Delta$ (paired) [95\\% CI] \\\\\n\\midrule\n"
+        + "\n".join(rows)
         + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (FIGDIR / f"{stem}_table.tex").write_text(tex)
@@ -407,14 +484,21 @@ def _write_outputs(results, model, bench, n_problems, quiet=False, tag=""):
     if quiet:
         return
     print(f"\n{bench.upper()} reasoning search ({n_problems} problems), model {model}")
-    print(f"  {'budget':>8s} {'best-of-N':>18s} {'value-guided':>18s} {'delta (paired) [95% CI]':>26s}")
+    print(
+        f"  {'budget':>8s} {'best-of-N':>18s} {'value-guided':>18s} "
+        f"{'delta (paired) [95% CI]':>26s}"
+    )
     for r in levels:
         b = r["matched_budget"]
         bo_m, bo_lo, bo_hi = _bootstrap_ci(r["best_of_n"]["hits"], seed=b)
         vg_m, vg_lo, vg_hi = _bootstrap_ci(r["value_guided"]["hits"], seed=b + 1)
-        d_m, d_lo, d_hi = _paired_delta_ci(r["best_of_n"]["hits"], r["value_guided"]["hits"], seed=b)
-        print(f"  {b:8d} {bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}] "
-              f"{vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}] {d_m:+.3f} [{d_lo:+.2f},{d_hi:+.2f}]")
+        d_m, d_lo, d_hi = _paired_delta_ci(
+            r["best_of_n"]["hits"], r["value_guided"]["hits"], seed=b
+        )
+        print(
+            f"  {b:8d} {bo_m:.3f} [{bo_lo:.2f},{bo_hi:.2f}] "
+            f"{vg_m:.3f} [{vg_lo:.2f},{vg_hi:.2f}] {d_m:+.3f} [{d_lo:+.2f},{d_hi:+.2f}]"
+        )
     try:
         out = _plot_figure(results, model, bench, n_problems, tag=tag)
         print(f"\nwrote json+table to {FIGDIR} and figure to {out} (+ .png)")
@@ -443,14 +527,22 @@ def _plot_figure(results, model, bench, n_problems, tag=""):
 
     fig, ax = plt.subplots(figsize=(6.6, 4.6))
     ci_band(ax, budgets, _samples("best_of_n"), PALETTE["orange"], label="best-of-N", marker="s")
-    ci_band(ax, budgets, _samples("value_guided"), PALETTE["red"],
-            label="value-guided (ours)", marker="o")
+    ci_band(
+        ax,
+        budgets,
+        _samples("value_guided"),
+        PALETTE["red"],
+        label="value-guided (ours)",
+        marker="o",
+    )
     ax.set_xscale("log")
     ax.set_xlabel("matched compute budget (generation calls)")
     ax.set_ylabel(f"{bench.upper()} accuracy")
     title_model = model.split(".")[-1][:24]
-    ax.set_title(f"Value-guided vs. best-of-N at matched compute "
-                 f"({n_problems} {bench.upper()}, {title_model})")
+    ax.set_title(
+        f"Value-guided vs. best-of-N at matched compute "
+        f"({n_problems} {bench.upper()}, {title_model})"
+    )
     ax.legend(loc="lower right")
     fig.tight_layout()
     return str(save_figure(fig, _stem(bench, tag)))
@@ -458,27 +550,44 @@ def _plot_figure(results, model, bench, n_problems, tag=""):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--benchmark", choices=list(BENCHMARKS), default="math",
-                    help="math (headline, long chains) or gsm8k (baseline)")
+    ap.add_argument(
+        "--benchmark",
+        choices=list(BENCHMARKS),
+        default="math",
+        help="math (headline, long chains) or gsm8k (baseline)",
+    )
     ap.add_argument("--n-problems", type=int, default=100)
     ap.add_argument("--region", default="us-east-1")
     ap.add_argument("--model", default=MODEL_ID)
     ap.add_argument("--branching", type=int, default=3)
     ap.add_argument("--rollouts", type=int, default=2)
     ap.add_argument("--final-rollouts", type=int, default=5)
-    ap.add_argument("--depth-sweep", default="",
-                    help="comma-separated n_steps values (each is one matched-budget level); "
-                         "empty uses the benchmark's default sweep")
+    ap.add_argument(
+        "--depth-sweep",
+        default="",
+        help="comma-separated n_steps values (each is one matched-budget level); "
+        "empty uses the benchmark's default sweep",
+    )
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="")
-    ap.add_argument("--resume", action="store_true",
-                    help="skip budget levels already in the benchmark's results JSON")
-    ap.add_argument("--workers", type=int, default=8,
-                    help="problems to run concurrently per level (I/O-bound; ~linear speedup)")
-    ap.add_argument("--tag", default="",
-                    help="suffix for output files, e.g. a model label, so runs on different "
-                         "models don't overwrite each other (empty = the headline file names)")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="skip budget levels already in the benchmark's results JSON",
+    )
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=8,
+        help="problems to run concurrently per level (I/O-bound; ~linear speedup)",
+    )
+    ap.add_argument(
+        "--tag",
+        default="",
+        help="suffix for output files, e.g. a model label, so runs on different "
+        "models don't overwrite each other (empty = the headline file names)",
+    )
     ap.add_argument("--mock", action="store_true", help="deterministic mock model, no deps/creds")
     args = ap.parse_args()
 
@@ -522,8 +631,10 @@ def main() -> None:
             return
 
     model_label = "mock" if args.mock else args.model
-    print(f"{args.benchmark.upper()} reasoning search: {len(problems)} problems, "
-          f"model {model_label}, depth sweep {depths}")
+    print(
+        f"{args.benchmark.upper()} reasoning search: {len(problems)} problems, "
+        f"model {model_label}, depth sweep {depths}"
+    )
 
     stem = _stem(args.benchmark, args.tag)
     results: dict[str, dict] = {}
@@ -541,19 +652,31 @@ def main() -> None:
         if key in results:
             continue
         try:
-            level = run_level(problems, generate, cfg, extract_fn, grade_fn, budget_error,
-                              workers=args.workers, prompts=prompts, value_factory=value_factory,
-                              select=select)
+            level = run_level(
+                problems,
+                generate,
+                cfg,
+                extract_fn,
+                grade_fn,
+                budget_error,
+                workers=args.workers,
+                prompts=prompts,
+                value_factory=value_factory,
+                select=select,
+            )
         except budget_error as e:
             print(f"\n[budget stop] {e}  (completed {i}/{len(depths)} levels)")
             break
         results[key] = level
         bo_acc = sum(level["best_of_n"]["hits"]) / max(1, level["n_problems"])
         vg_acc = sum(level["value_guided"]["hits"]) / max(1, level["n_problems"])
-        print(f"  [budget {key}] best-of-N acc={bo_acc:.3f}  value-guided acc={vg_acc:.3f}  "
-              f"({(time.monotonic() - start) / 60:.1f}m elapsed)")
-        _write_outputs(results, model_label, args.benchmark, len(problems), quiet=True,
-                       tag=args.tag)
+        print(
+            f"  [budget {key}] best-of-N acc={bo_acc:.3f}  value-guided acc={vg_acc:.3f}  "
+            f"({(time.monotonic() - start) / 60:.1f}m elapsed)"
+        )
+        _write_outputs(
+            results, model_label, args.benchmark, len(problems), quiet=True, tag=args.tag
+        )
 
     _write_outputs(results, model_label, args.benchmark, len(problems), tag=args.tag)
     if client is not None:

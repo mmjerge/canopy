@@ -145,9 +145,7 @@ def test_gain_degrades_monotonically_in_probe_informativeness():
     """The advantage interpolates smoothly between the two regimes."""
     k, budget = 8, 1024
     rates = [
-        scoped_success_rate(
-            "value_guided", k, k, budget, 0.3, probe_informativeness=q, seeds=120
-        )
+        scoped_success_rate("value_guided", k, k, budget, 0.3, probe_informativeness=q, seeds=120)
         for q in (0.0, 0.5, 1.0)
     ]
     assert rates[0] < rates[1] < rates[2]

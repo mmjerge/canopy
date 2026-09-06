@@ -80,11 +80,11 @@ def gap_grid() -> np.ndarray:
 def main() -> None:
     set_style()
     print(
-        f"scope sweep: depth={DEPTH}, K={N_DECISIONS}, budget={BUDGET}, "
-        f"{SEEDS} seeds per cell"
+        f"scope sweep: depth={DEPTH}, K={N_DECISIONS}, budget={BUDGET}, " f"{SEEDS} seeds per cell"
     )
     gaps = gap_grid()
-    print(f"{'s \\ q':>8s} " + " ".join(f"{q:6.2f}" for q in INFORMATIVENESS))
+    header = "s \\ q"
+    print(f"{header:>8s} " + " ".join(f"{q:6.2f}" for q in INFORMATIVENESS))
     for i, s in enumerate(SATURATIONS):
         print(f"{s:8.2f} " + " ".join(f"{g:+6.2f}" for g in gaps[i]))
 
@@ -92,9 +92,7 @@ def main() -> None:
 
     # Panel A: the phase diagram
     vmax = float(np.abs(gaps).max())
-    im = axA.imshow(
-        gaps, origin="upper", aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax
-    )
+    im = axA.imshow(gaps, origin="upper", aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax)
     axA.set_xticks(range(len(INFORMATIVENESS)), [f"{q:.2f}" for q in INFORMATIVENESS])
     axA.set_yticks(range(len(SATURATIONS)), [f"{s:.2f}" for s in SATURATIONS])
     axA.set_xlabel("probe informativeness $q$")

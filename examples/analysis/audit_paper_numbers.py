@@ -13,7 +13,6 @@ Run:  python examples/analysis/audit_paper_numbers.py
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import numpy as np
@@ -68,8 +67,11 @@ def main() -> None:
     check("GPQA CI hi", hi, 0.19, 0.011)
 
     # Within-model contrast and unreachable-regime cells use each benchmark's LARGEST budget.
-    for bench, budget, want in [("gsm8k", "50", -0.005), ("math", "95", 0.333),
-                                ("gpqa_diamond", "77", 0.359)]:
+    for bench, budget, want in [
+        ("gsm8k", "50", -0.005),
+        ("math", "95", 0.333),
+        ("gpqa_diamond", "77", 0.359),
+    ]:
         bo, vg = reasoning(f"reasoning_search_{bench}_sonnet45_results.json", budget)
         check(f"within-model sonnet {bench} delta", float(np.mean(vg) - np.mean(bo)), want, 0.0006)
 
@@ -83,10 +85,15 @@ def main() -> None:
         d = j(f"reasoning_search_{bench}_results.json")
         deltas = []
         for lv in d["levels"].values():
-            deltas.append(float(np.mean(lv["value_guided"]["hits"]) - np.mean(lv["best_of_n"]["hits"])))
-        print(f"  [{'PASS' if min(deltas) >= lo_w - 0.006 and max(deltas) <= hi_w + 0.006 else 'FAIL'}] "
-              f"{bench} null range: recomputed [{min(deltas):+.3f},{max(deltas):+.3f}] vs paper "
-              f"[{lo_w:+.2f},{hi_w:+.2f}]")
+            deltas.append(
+                float(np.mean(lv["value_guided"]["hits"]) - np.mean(lv["best_of_n"]["hits"]))
+            )
+        ok = min(deltas) >= lo_w - 0.006 and max(deltas) <= hi_w + 0.006
+        print(
+            f"  [{'PASS' if ok else 'FAIL'}] "
+            f"{bench} null range: recomputed [{min(deltas):+.3f},{max(deltas):+.3f}] vs paper "
+            f"[{lo_w:+.2f},{hi_w:+.2f}]"
+        )
         if not (min(deltas) >= lo_w - 0.006 and max(deltas) <= hi_w + 0.006):
             FAILS.append(f"{bench} null range")
 
@@ -102,7 +109,9 @@ def main() -> None:
 
     print("== tau-bench (5-replicate study) ==")
     reg, flat = [], []
-    files = ["taubench_routing_results.json"] + [f"taubench_routing_rep{i}_results.json" for i in range(2, 6)]
+    files = ["taubench_routing_results.json"] + [
+        f"taubench_routing_rep{i}_results.json" for i in range(2, 6)
+    ]
     for f in files:
         r = j(f)["results"]
         reg.append(r["routed-regional (ours)"]["success"])
@@ -121,7 +130,12 @@ def main() -> None:
     # the paper now reports the steady state (tie with LFU, both >> LRU) with the transient
     # shown in the figure. This audit finding removed that row from Table 1.
     p = j("prefix_cache_results.json")
-    check("prompt stream adaptive post-shift (steady)", p["shift_final_savings"]["adaptive"], 1.28, 0.006)
+    check(
+        "prompt stream adaptive post-shift (steady)",
+        p["shift_final_savings"]["adaptive"],
+        1.28,
+        0.006,
+    )
     check("prompt stream LFU post-shift (steady)", p["shift_final_savings"]["lfu"], 1.25, 0.006)
     check("prompt stream LRU post-shift (stale)", p["shift_final_savings"]["lru"], 0.32, 0.006)
     m = j("prefix_cache_mooncake_toolagent_results.json")
@@ -131,11 +145,21 @@ def main() -> None:
     v = j("vllm_prefix_cache_results.json")
     check("vLLM TTFT p50 on", v["configs"]["on"]["ttft_p50"], 0.267, 0.0006)
     check("vLLM TTFT p50 off", v["configs"]["off"]["ttft_p50"], 0.961, 0.0006)
-    check("vLLM TTFT ratio 3.6x", v["configs"]["off"]["ttft_p50"] / v["configs"]["on"]["ttft_p50"], 3.6, 0.05)
+    check(
+        "vLLM TTFT ratio 3.6x",
+        v["configs"]["off"]["ttft_p50"] / v["configs"]["on"]["ttft_p50"],
+        3.6,
+        0.05,
+    )
     check("vLLM throughput on", v["configs"]["on"]["throughput_tok_s"], 678, 0.5)
     check("vLLM throughput off", v["configs"]["off"]["throughput_tok_s"], 181, 0.5)
     e = j("vllm_policy_results.json")
-    check("eviction adaptive post-shift", e["policies"]["adaptive"]["ttft_saved_ms_postshift"], 23.6, 0.06)
+    check(
+        "eviction adaptive post-shift",
+        e["policies"]["adaptive"]["ttft_saved_ms_postshift"],
+        23.6,
+        0.06,
+    )
     check("eviction LRU post-shift", e["policies"]["lru"]["ttft_saved_ms_postshift"], 12.9, 0.06)
 
     print("== Trimming ==")

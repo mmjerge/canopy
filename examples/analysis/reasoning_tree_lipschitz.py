@@ -80,7 +80,7 @@ def _rankdata(a):
         j = i
         while j + 1 < len(a) and sorted_a[j + 1] == sorted_a[i]:
             j += 1
-        ranks[order[i:j + 1]] = (i + j) / 2.0  # average rank for the tie group
+        ranks[order[i : j + 1]] = (i + j) / 2.0  # average rank for the tie group
         i = j + 1
     return ranks
 
@@ -112,13 +112,22 @@ def _one_problem(q, gold, generate, cfg, extract_fn, grade_fn, eps):
     branching, n_steps, rollouts = cfg
     trace: list[dict] = []
     value_guided_search(
-        q, gold, generate, branching=branching, n_steps=n_steps, rollouts=rollouts,
-        final_rollouts=rollouts, extract_fn=extract_fn, grade_fn=grade_fn, trace_log=trace,
+        q,
+        gold,
+        generate,
+        branching=branching,
+        n_steps=n_steps,
+        rollouts=rollouts,
+        final_rollouts=rollouts,
+        extract_fn=extract_fn,
+        grade_fn=grade_fn,
+        trace_log=trace,
     )
     by_step: dict[int, list[dict]] = {}
     cheap, true = [], []
     for rec in trace:
-        cheap.append(rec["cheap_value"]); true.append(rec["true_value"])
+        cheap.append(rec["cheap_value"])
+        true.append(rec["true_value"])
         by_step.setdefault(rec["step"], []).append(rec)
     spreads, ehits, egaps, pv = [], [], [], {}
     for step, recs in by_step.items():
@@ -128,8 +137,15 @@ def _one_problem(q, gold, generate, cfg, extract_fn, grade_fn, eps):
         ehits.append(float(tv[int(cv.argmax())] >= tv.max() - eps))
         egaps.append(float(tv.max() - tv[int(cv.argmax())]))
         pv[step] = next(r["true_value"] for r in recs if r["chosen"])
-    return {"cheap": cheap, "true": true, "spreads": spreads, "ehits": ehits,
-            "egaps": egaps, "pv": pv, "nsteps": len(by_step)}
+    return {
+        "cheap": cheap,
+        "true": true,
+        "spreads": spreads,
+        "ehits": ehits,
+        "egaps": egaps,
+        "pv": pv,
+        "nsteps": len(by_step),
+    }
 
 
 def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_error, workers=8):
@@ -150,8 +166,11 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     path_value_by_step = [[] for _ in range(n_steps)]
     eps = 1.0 / max(1, rollouts) / 2.0
     calls_per_problem = n_steps * branching * (1 + rollouts) + rollouts
-    bar = (tqdm(total=len(problems) * calls_per_problem, unit="call", desc="reasoning-tree")
-           if tqdm else None)
+    bar = (
+        tqdm(total=len(problems) * calls_per_problem, unit="call", desc="reasoning-tree")
+        if tqdm
+        else None
+    )
 
     def gen(prompt, max_tokens, seed):
         out = generate(prompt, max_tokens, seed)
@@ -162,8 +181,10 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     done = 0
     skipped = 0
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-        futures = {ex.submit(_one_problem, q, gold, gen, cfg, extract_fn, grade_fn, eps): (q, gold)
-                   for q, gold in problems}
+        futures = {
+            ex.submit(_one_problem, q, gold, gen, cfg, extract_fn, grade_fn, eps): (q, gold)
+            for q, gold in problems
+        }
         for fut in as_completed(futures):
             try:
                 r = fut.result()
@@ -174,8 +195,11 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
                 if skipped <= 3:
                     print(f"  [skip problem] {type(e).__name__}: {str(e)[:100]}")
                 continue
-            all_cheap += r["cheap"]; all_true += r["true"]
-            sibling_spreads += r["spreads"]; edge_hits += r["ehits"]; edge_gaps += r["egaps"]
+            all_cheap += r["cheap"]
+            all_true += r["true"]
+            sibling_spreads += r["spreads"]
+            edge_hits += r["ehits"]
+            edge_gaps += r["egaps"]
             for step, v in r["pv"].items():
                 path_value_by_step[step].append(v)
             per_problem_steps.append(r["nsteps"])
@@ -183,8 +207,9 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
             if bar is not None:
                 hr = float(np.mean(edge_hits)) if edge_hits else 0.0
                 sp = float(np.mean(sibling_spreads)) if sibling_spreads else 0.0
-                bar.set_postfix_str(f"{done}/{len(problems)} prob, edge-hit={hr:.2f} "
-                                    f"spread={sp:.2f}")
+                bar.set_postfix_str(
+                    f"{done}/{len(problems)} prob, edge-hit={hr:.2f} " f"spread={sp:.2f}"
+                )
     if bar is not None:
         bar.close()
     spreads = np.array(sibling_spreads)
@@ -197,18 +222,26 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     n_piv = int(pivotal.sum())
     piv_mean, piv_lo, piv_hi = _bootstrap_ci(ehits[pivotal]) if n_piv else (float("nan"),) * 3
     return {
-        "cheap": all_cheap, "true": all_true,
+        "cheap": all_cheap,
+        "true": all_true,
         "sibling_spreads": sibling_spreads,
         "edge_hit_rate": float(ehits.mean()) if ehits.size else 0.0,
         "edge_gap": float(egaps.mean()) if egaps.size else 0.0,
-        "edge_hit_pivotal": piv_mean, "edge_hit_pivotal_lo": piv_lo, "edge_hit_pivotal_hi": piv_hi,
+        "edge_hit_pivotal": piv_mean,
+        "edge_hit_pivotal_lo": piv_lo,
+        "edge_hit_pivotal_hi": piv_hi,
         "edge_gap_pivotal": float(egaps[pivotal].mean()) if n_piv else float("nan"),
-        "n_pivotal": n_piv, "n_steps_total": int(spreads.size),
+        "n_pivotal": n_piv,
+        "n_steps_total": int(spreads.size),
         "K_by_tau": {t: float(np.mean(spreads > t)) if spreads.size else 0.0 for t in TAU_SWEEP},
         "n_steps_seen": per_problem_steps,
-        "path_value_by_step": [float(np.mean(v)) if v else float("nan")
-                               for v in path_value_by_step],
-        "tau": tau, "branching": branching, "n_steps": n_steps, "rollouts": rollouts,
+        "path_value_by_step": [
+            float(np.mean(v)) if v else float("nan") for v in path_value_by_step
+        ],
+        "tau": tau,
+        "branching": branching,
+        "n_steps": n_steps,
+        "rollouts": rollouts,
     }
 
 
@@ -220,20 +253,28 @@ def _write_outputs(agg, model, bench, n_problems):
     base = 1.0 / max(2, agg["branching"])  # edge-hit rate a random pick would achieve
     stem = f"reasoning_tree_lipschitz_{bench}"
     payload = {
-        "benchmark": bench, "model": model, "n_problems": n_problems,
-        "pearson_cheap_true": r_p, "spearman_cheap_true": r_s,
-        "edge_hit_rate": agg["edge_hit_rate"], "random_edge_hit_rate": base,
+        "benchmark": bench,
+        "model": model,
+        "n_problems": n_problems,
+        "pearson_cheap_true": r_p,
+        "spearman_cheap_true": r_s,
+        "edge_hit_rate": agg["edge_hit_rate"],
+        "random_edge_hit_rate": base,
         "edge_gap": agg["edge_gap"],
         "edge_hit_pivotal": agg["edge_hit_pivotal"],
         "edge_hit_pivotal_lo": agg["edge_hit_pivotal_lo"],
         "edge_hit_pivotal_hi": agg["edge_hit_pivotal_hi"],
         "edge_gap_pivotal": agg["edge_gap_pivotal"],
-        "n_pivotal": agg["n_pivotal"], "n_steps_total": agg["n_steps_total"], "tau": agg["tau"],
+        "n_pivotal": agg["n_pivotal"],
+        "n_steps_total": agg["n_steps_total"],
+        "tau": agg["tau"],
         "K_by_tau": agg["K_by_tau"],
         "max_steps": int(steps.max()) if steps.size else 0,
         "path_value_by_step": agg["path_value_by_step"],
-        "branching": agg["branching"], "n_steps": agg["n_steps"],
-        "rollouts": agg["rollouts"], "n_nodes": len(agg["cheap"]),
+        "branching": agg["branching"],
+        "n_steps": agg["n_steps"],
+        "rollouts": agg["rollouts"],
+        "n_nodes": len(agg["cheap"]),
     }
     (FIGDIR / f"{stem}_results.json").write_text(json.dumps(payload, indent=2))
 
@@ -255,19 +296,29 @@ def _write_outputs(agg, model, bench, n_problems):
     )
     (FIGDIR / f"{stem}_table.tex").write_text(tex)
 
-    print(f"\n{bench.upper()} reasoning-tree characterization ({n_problems} problems, "
-          f"{payload['n_nodes']} nodes), model {model}")
+    print(
+        f"\n{bench.upper()} reasoning-tree characterization ({n_problems} problems, "
+        f"{payload['n_nodes']} nodes), model {model}"
+    )
     print(f"  cheap-vs-true value: Spearman rho={r_s:.3f} (headline), Pearson r={r_p:.3f}")
-    print(f"  edge-following hit rate={agg['edge_hit_rate']:.3f} (chance {base:.2f}); "
-          f"mean edge gap={agg['edge_gap']:.3f}")
-    print(f"  edge-following hit rate on PIVOTAL steps (spread>{agg['tau']})="
-          f"{agg['edge_hit_pivotal']:.3f} [{agg['edge_hit_pivotal_lo']:.2f}, "
-          f"{agg['edge_hit_pivotal_hi']:.2f}]  (n={agg['n_pivotal']}/{agg['n_steps_total']}; "
-          f"gap={agg['edge_gap_pivotal']:.3f})  <- the decisive number")
-    print("  pivotal-step fraction: "
-          + ", ".join(f"tau={t}:{100 * v:.0f}%" for t, v in agg["K_by_tau"].items()))
-    print("  chosen-path true value by step: "
-          + ", ".join(f"{v:.2f}" for v in agg["path_value_by_step"]))
+    print(
+        f"  edge-following hit rate={agg['edge_hit_rate']:.3f} (chance {base:.2f}); "
+        f"mean edge gap={agg['edge_gap']:.3f}"
+    )
+    print(
+        f"  edge-following hit rate on PIVOTAL steps (spread>{agg['tau']})="
+        f"{agg['edge_hit_pivotal']:.3f} [{agg['edge_hit_pivotal_lo']:.2f}, "
+        f"{agg['edge_hit_pivotal_hi']:.2f}]  (n={agg['n_pivotal']}/{agg['n_steps_total']}; "
+        f"gap={agg['edge_gap_pivotal']:.3f})  <- the decisive number"
+    )
+    print(
+        "  pivotal-step fraction: "
+        + ", ".join(f"tau={t}:{100 * v:.0f}%" for t, v in agg["K_by_tau"].items())
+    )
+    print(
+        "  chosen-path true value by step: "
+        + ", ".join(f"{v:.2f}" for v in agg["path_value_by_step"])
+    )
     try:
         out = _plot(agg, payload, model, bench, n_problems)
         print(f"  wrote json+table to {FIGDIR} and figure to {out} (+ .png)")
@@ -292,26 +343,34 @@ def _plot(agg, payload, model, bench, n_problems):
         axA.plot(xs, a + b * xs, "-", color=PALETTE["red"], lw=2, label="linear fit")
     axA.set_xlabel("cheap probe value (self-consistency)")
     axA.set_ylabel("true node value (fraction of rollouts correct)")
-    axA.set_title(f"Cheap probe tracks true value (Spearman $\\rho$="
-                  f"{payload['spearman_cheap_true']:.2f}, edge-hit "
-                  f"{payload['edge_hit_rate']:.2f} vs {payload['random_edge_hit_rate']:.2f})")
+    axA.set_title(
+        f"Cheap probe tracks true value (Spearman $\\rho$="
+        f"{payload['spearman_cheap_true']:.2f}, edge-hit "
+        f"{payload['edge_hit_rate']:.2f} vs {payload['random_edge_hit_rate']:.2f})"
+    )
     axA.legend(loc="upper left")
 
     # Panel B: distribution of sibling true-value spreads (the "violation size" spectrum)
     spreads = np.asarray(agg["sibling_spreads"])
     if spreads.size:
-        axB.hist(spreads, bins=np.linspace(0, 1, 11), color=PALETTE["green"], alpha=0.8,
-                 rwidth=0.9)
+        axB.hist(spreads, bins=np.linspace(0, 1, 11), color=PALETTE["green"], alpha=0.8, rwidth=0.9)
         for t, v in agg["K_by_tau"].items():
             axB.axvline(t, color=PALETTE["gray"], ls=":", lw=1)
-            axB.text(t, axB.get_ylim()[1] * 0.9, f" {100 * v:.0f}%>$\\tau$", fontsize=7,
-                     color=PALETTE["gray"])
+            axB.text(
+                t,
+                axB.get_ylim()[1] * 0.9,
+                f" {100 * v:.0f}%>$\\tau$",
+                fontsize=7,
+                color=PALETTE["gray"],
+            )
     axB.set_xlabel("sibling true-value spread per step (max $-$ min)")
     axB.set_ylabel("number of steps")
     axB.set_title("Most steps are smooth; few are pivotal (violations)")
 
-    fig.suptitle(f"Reasoning value function: tree-Lipschitz backbone + few violations "
-                 f"({n_problems} {bench.upper()}, {model})")
+    fig.suptitle(
+        f"Reasoning value function: tree-Lipschitz backbone + few violations "
+        f"({n_problems} {bench.upper()}, {model})"
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     return str(save_figure(fig, f"reasoning_tree_lipschitz_{bench}"))
 
@@ -327,12 +386,24 @@ def main() -> None:
     ap.add_argument("--model", default="us.meta.llama3-1-8b-instruct-v1:0")
     ap.add_argument("--branching", type=int, default=3)
     ap.add_argument("--n-steps", type=int, default=6)
-    ap.add_argument("--rollouts", type=int, default=8,
-                    help="rollouts per node: more = less-noisy true-value estimate (>=8 advised)")
-    ap.add_argument("--tau", type=float, default=0.5,
-                    help="reference pivotal-step threshold (a sweep is always reported too)")
-    ap.add_argument("--workers", type=int, default=8,
-                    help="problems to run concurrently (I/O-bound; ~linear speedup)")
+    ap.add_argument(
+        "--rollouts",
+        type=int,
+        default=8,
+        help="rollouts per node: more = less-noisy true-value estimate (>=8 advised)",
+    )
+    ap.add_argument(
+        "--tau",
+        type=float,
+        default=0.5,
+        help="reference pivotal-step threshold (a sweep is always reported too)",
+    )
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=8,
+        help="problems to run concurrently (I/O-bound; ~linear speedup)",
+    )
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="")
@@ -369,17 +440,29 @@ def main() -> None:
             problems = RS_BENCH[args.benchmark]["loader"](args.n_problems)
             budget_error, model_label = BudgetError, args.model
         except Exception as e:  # noqa: BLE001
-            print(f"Could not initialize the real-LLM characterization: {e}\n"
-                  "  uv sync --extra llm --extra bench  (+ AWS Bedrock access)\n"
-                  "  smoke-test with: --mock")
+            print(
+                f"Could not initialize the real-LLM characterization: {e}\n"
+                "  uv sync --extra llm --extra bench  (+ AWS Bedrock access)\n"
+                "  smoke-test with: --mock"
+            )
             return
 
-    print(f"{args.benchmark.upper()} reasoning-tree characterization: {len(problems)} problems, "
-          f"model {model_label}, branching {args.branching}, {args.n_steps} steps, "
-          f"{args.rollouts} rollouts/node, {args.workers} workers")
+    print(
+        f"{args.benchmark.upper()} reasoning-tree characterization: {len(problems)} problems, "
+        f"model {model_label}, branching {args.branching}, {args.n_steps} steps, "
+        f"{args.rollouts} rollouts/node, {args.workers} workers"
+    )
     try:
-        agg = characterize(problems, generate, cfg, extract_fn, grade_fn, args.tau,
-                           budget_error, workers=args.workers)
+        agg = characterize(
+            problems,
+            generate,
+            cfg,
+            extract_fn,
+            grade_fn,
+            args.tau,
+            budget_error,
+            workers=args.workers,
+        )
     except budget_error as e:
         print(f"[budget stop] {e}")
         return

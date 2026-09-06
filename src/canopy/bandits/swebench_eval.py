@@ -58,7 +58,7 @@ def extract_patch(text: str) -> str:
         body = blocks[-1] if blocks else None
     if body is None:
         m2 = _DIFF_START.search(text)
-        body = text[m2.start():] if m2 else ""
+        body = text[m2.start() :] if m2 else ""
     body = body.strip()
     return body + "\n" if body else ""
 
@@ -120,8 +120,10 @@ def patched_paths(gold_patch: str) -> list[str]:
     return out
 
 
-def fetch_oracle_files(repo: str, base_commit: str, paths: list[str], timeout: float = 20.0) -> dict:
-    """Fetch exact base-commit contents of ``paths`` from GitHub raw (all SWE-bench repos are public).
+def fetch_oracle_files(
+    repo: str, base_commit: str, paths: list[str], timeout: float = 20.0
+) -> dict:
+    """Fetch exact base-commit contents of ``paths`` from GitHub raw (SWE-bench repos are public).
 
     Returns ``{path: content}`` for files that fetched successfully (HTTP 200). This is the oracle
     setting: we localize to the files the gold patch edits and give the model their current text,
@@ -145,8 +147,10 @@ def format_files(files: dict, max_chars_per_file: int = 24000) -> str:
     """Render ``{path: content}`` as labelled code blocks for the prompt (large files truncated)."""
     parts = []
     for path, content in files.items():
-        body = content if len(content) <= max_chars_per_file else (
-            content[:max_chars_per_file] + "\n# ... (file truncated) ...\n"
+        body = (
+            content
+            if len(content) <= max_chars_per_file
+            else (content[:max_chars_per_file] + "\n# ... (file truncated) ...\n")
         )
         parts.append(f"### {path}\n```python\n{body}\n```")
     return "\n\n".join(parts) if parts else "(no files retrieved)"
@@ -164,8 +168,10 @@ def _unified_diff(path: str, before: str, after: str) -> str:
     import difflib
 
     diff = difflib.unified_diff(
-        before.splitlines(keepends=True), after.splitlines(keepends=True),
-        fromfile=f"a/{path}", tofile=f"b/{path}",
+        before.splitlines(keepends=True),
+        after.splitlines(keepends=True),
+        fromfile=f"a/{path}",
+        tofile=f"b/{path}",
     )
     return "".join(diff)
 
@@ -186,7 +192,7 @@ def diff_to_edits(text: str) -> list[tuple[str, str, str]]:
         body = blocks[-1] if blocks else None
     if body is None:
         ms = _DIFF_START.search(text or "")
-        body = text[ms.start():] if ms else ""
+        body = text[ms.start() :] if ms else ""
 
     edits: list[tuple[str, str, str]] = []
     path, old, new, in_hunk = None, [], [], False
@@ -296,11 +302,17 @@ def run_harness(
     Raises ``subprocess.CalledProcessError`` on a non-zero exit that is not a per-instance failure.
     """
     cmd = [
-        sys.executable, "-m", "swebench.harness.run_evaluation",
-        "--dataset_name", dataset_name,
-        "--predictions_path", str(predictions_path),
-        "--run_id", run_id,
-        "--max_workers", str(workers),
+        sys.executable,
+        "-m",
+        "swebench.harness.run_evaluation",
+        "--dataset_name",
+        dataset_name,
+        "--predictions_path",
+        str(predictions_path),
+        "--run_id",
+        run_id,
+        "--max_workers",
+        str(workers),
     ]
     if instance_ids:
         cmd += ["--instance_ids", *instance_ids]
@@ -321,8 +333,14 @@ def parse_report(log_root: str | Path, run_id: str, model_name: str, instance_id
     non-application rather than raising.
     """
     p = _report_path(Path(log_root), run_id, model_name, instance_id)
-    out = {"resolved": False, "f2p_pass": 0, "f2p_total": 0, "p2p_pass": 0,
-           "p2p_total": 0, "applied": False}
+    out = {
+        "resolved": False,
+        "f2p_pass": 0,
+        "f2p_total": 0,
+        "p2p_pass": 0,
+        "p2p_total": 0,
+        "applied": False,
+    }
     if not p.exists():
         return out
     try:
@@ -338,8 +356,9 @@ def parse_report(log_root: str | Path, run_id: str, model_name: str, instance_id
     p2p = status.get("PASS_TO_PASS", {}) or {}
     fs, ff = f2p.get("success", []) or [], f2p.get("failure", []) or []
     ps, pf = p2p.get("success", []) or [], p2p.get("failure", []) or []
-    out.update(f2p_pass=len(fs), f2p_total=len(fs) + len(ff),
-               p2p_pass=len(ps), p2p_total=len(ps) + len(pf))
+    out.update(
+        f2p_pass=len(fs), f2p_total=len(fs) + len(ff), p2p_pass=len(ps), p2p_total=len(ps) + len(pf)
+    )
     return out
 
 
@@ -361,24 +380,32 @@ def is_resolved(outcome: dict) -> bool:
 
 
 def failing_f2p_feedback(outcome: dict, max_lines: int = 20) -> str:
-    """A short, human-readable feedback string for the refine prompt (which F2P tests still fail)."""
+    """A short, human-readable feedback string for the refine prompt (which F2P tests fail)."""
     n_fail = max(0, outcome.get("f2p_total", 0) - outcome.get("f2p_pass", 0))
     if not outcome.get("applied", False):
         return "The patch did not apply cleanly to the repository (check file paths and context)."
-    if n_fail == 0 and outcome.get("p2p_total", 0) and outcome.get("p2p_pass", 0) < outcome["p2p_total"]:
-        return ("All target (FAIL_TO_PASS) tests pass, but the patch breaks existing "
-                "(PASS_TO_PASS) tests. Make the fix narrower so it does not regress other behavior.")
+    if (
+        n_fail == 0
+        and outcome.get("p2p_total", 0)
+        and outcome.get("p2p_pass", 0) < outcome["p2p_total"]
+    ):
+        return (
+            "All target (FAIL_TO_PASS) tests pass, but the patch breaks existing "
+            "(PASS_TO_PASS) tests. Make the fix narrower so it does not regress other behavior."
+        )
     if n_fail == 0:
         return "All target tests pass."
-    return (f"{n_fail} of {outcome['f2p_total']} target tests still fail after your patch. "
-            "Revisit the root cause and adjust the fix.")
+    return (
+        f"{n_fail} of {outcome['f2p_total']} target tests still fail after your patch. "
+        "Revisit the root cause and adjust the fix."
+    )
 
 
 # --- batch grading orchestration + mock -----------------------------------------------------
 
 
 def _cand_model_name(tag: str, k: int) -> str:
-    """Per-candidate ``model_name_or_path`` so K candidates for one instance get separate reports."""
+    """Per-candidate ``model_name_or_path`` so K candidates get separate reports."""
     return f"{tag}__cand{k}"
 
 
@@ -415,8 +442,14 @@ def grade_candidates(
         preds.append({"instance_id": iid, "model_name_or_path": mname, "model_patch": patch})
 
     outcomes: list[dict] = [
-        {"resolved": False, "f2p_pass": 0, "f2p_total": 0, "p2p_pass": 0, "p2p_total": 0,
-         "applied": False}
+        {
+            "resolved": False,
+            "f2p_pass": 0,
+            "f2p_total": 0,
+            "p2p_pass": 0,
+            "p2p_total": 0,
+            "applied": False,
+        }
         for _ in patches
     ]
     if not preds:
@@ -424,8 +457,9 @@ def grade_candidates(
 
     preds_path = work / f"preds_{run_id}_{tag}.jsonl"
     write_predictions(preds_path, preds)
-    run_harness(dataset_name, preds_path, run_id, [iid], workers=workers, namespace=namespace,
-                cwd=work)
+    run_harness(
+        dataset_name, preds_path, run_id, [iid], workers=workers, namespace=namespace, cwd=work
+    )
     for k, mname in index.items():
         outcomes[k] = parse_report(work / "logs", run_id, mname, iid)
     return outcomes
@@ -451,8 +485,16 @@ class MockGrader:
         out = []
         for patch in patches:
             if not patch:
-                out.append({"resolved": False, "f2p_pass": 0, "f2p_total": self.f2p_total,
-                            "p2p_pass": 0, "p2p_total": self.p2p_total, "applied": False})
+                out.append(
+                    {
+                        "resolved": False,
+                        "f2p_pass": 0,
+                        "f2p_total": self.f2p_total,
+                        "p2p_pass": 0,
+                        "p2p_total": self.p2p_total,
+                        "applied": False,
+                    }
+                )
                 continue
             h = int(hashlib.md5(f"{self.seed}:{patch}".encode()).hexdigest(), 16)
             quality = (h % 1000) / 1000.0
@@ -461,6 +503,14 @@ class MockGrader:
             f2p_pass = round(quality * self.f2p_total)
             p2p_pass = self.p2p_total if quality > 0.3 else round(quality * self.p2p_total)
             resolved = (f2p_pass == self.f2p_total) and (p2p_pass == self.p2p_total)
-            out.append({"resolved": resolved, "f2p_pass": f2p_pass, "f2p_total": self.f2p_total,
-                        "p2p_pass": p2p_pass, "p2p_total": self.p2p_total, "applied": True})
+            out.append(
+                {
+                    "resolved": resolved,
+                    "f2p_pass": f2p_pass,
+                    "f2p_total": self.f2p_total,
+                    "p2p_pass": p2p_pass,
+                    "p2p_total": self.p2p_total,
+                    "applied": True,
+                }
+            )
         return out

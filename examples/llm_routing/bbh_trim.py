@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import string
 import sys
 from pathlib import Path
@@ -37,8 +36,11 @@ N_DEMOS_MAX = 3
 # Trim levels: (instruction text, number of few-shot demos). Level 0 = verbose + 3-shot; higher
 # levels strip instruction and demos. Every level keeps a parseable "A:" answer cue.
 TRIM_SPECS = [
-    ("Solve the following reasoning task. Read the problem, reason about it, then give the "
-     "final answer after 'A:'.\n\n", 3),
+    (
+        "Solve the following reasoning task. Read the problem, reason about it, then give the "
+        "final answer after 'A:'.\n\n",
+        3,
+    ),
     ("Solve the following reasoning task.\n\n", 2),
     ("Solve the following reasoning task.\n\n", 1),
     ("Solve the following reasoning task.\n\n", 0),
@@ -74,7 +76,9 @@ def load_bbh(tasks, n_per: int, n_demos: int = N_DEMOS_MAX):
     items, demos_by_task = [], {}
     for ti, task in enumerate(tasks):
         ds = load_dataset("lukaemon/bbh", task, split="test")
-        demos_by_task[ti] = [(ds[i]["input"], ds[i]["target"]) for i in range(min(n_demos, len(ds)))]
+        demos_by_task[ti] = [
+            (ds[i]["input"], ds[i]["target"]) for i in range(min(n_demos, len(ds)))
+        ]
         for i in range(n_demos, min(n_demos + n_per, len(ds))):
             items.append((ds[i]["input"], ds[i]["target"], ti))
     return items, demos_by_task, tasks
@@ -100,11 +104,16 @@ def measure_real(items, demos_by_task, region, cache, max_calls, max_spend, npz_
             return quality, in_tokens
         print(f"resuming from {npz_cache.name}: {int(done.sum())}/{done.size} cells done")
     else:
-        quality = np.zeros((N_TRIM, n)); in_tokens = np.zeros((N_TRIM, n))
+        quality = np.zeros((N_TRIM, n))
+        in_tokens = np.zeros((N_TRIM, n))
         done = np.zeros((N_TRIM, n), dtype=bool)
 
-    client = CachingLLMClient(BedrockClient(region=region, max_tokens=24), cache,
-                              max_calls=max_calls, max_spend_usd=max_spend)
+    client = CachingLLMClient(
+        BedrockClient(region=region, max_tokens=24),
+        cache,
+        max_calls=max_calls,
+        max_spend_usd=max_spend,
+    )
     fails = since = 0
 
     def _save():
@@ -130,13 +139,17 @@ def measure_real(items, demos_by_task, region, cache, max_calls, max_spend, npz_
                         print(f"  call failed: {type(e).__name__}: {str(e)[:110]}")
                 since += 1
                 if since >= ckpt:
-                    _save(); since = 0
+                    _save()
+                    since = 0
             spec = TRIM_SPECS[lvl]
-            print(f"  trim {lvl} ({spec[1]}-shot): acc={quality[lvl].mean():.3f} "
-                  f"in_tok={in_tokens[lvl].mean():.0f}")
+            print(
+                f"  trim {lvl} ({spec[1]}-shot): acc={quality[lvl].mean():.3f} "
+                f"in_tok={in_tokens[lvl].mean():.0f}"
+            )
     except BudgetError as e:
         print(f"\n[budget stop] {e}  Saving progress; re-run to resume.")
-        _save(); raise
+        _save()
+        raise
     _save()
     print(f"  budget: {client.stats()}")
     if fails > 0.2 * N_TRIM * n:
@@ -147,7 +160,8 @@ def measure_real(items, demos_by_task, region, cache, max_calls, max_spend, npz_
 def measure_mock(items, seed=0):
     rng = np.random.default_rng(seed)
     n = len(items)
-    quality = np.zeros((N_TRIM, n)); in_tokens = np.zeros((N_TRIM, n))
+    quality = np.zeros((N_TRIM, n))
+    in_tokens = np.zeros((N_TRIM, n))
     base_tok = np.array([420.0, 300.0, 210.0, 90.0, 70.0])
     base_acc = np.array([0.62, 0.60, 0.57, 0.50, 0.44])
     for lvl in range(N_TRIM):
@@ -166,10 +180,17 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False):
     orc_tok, orc_acc = frontier["oracle"][li]
 
     payload = {
-        "model": model, "n_items": len(items), "n_tasks": n_tasks, "lambdas": LAMBDAS,
+        "model": model,
+        "n_items": len(items),
+        "n_tasks": n_tasks,
+        "lambdas": LAMBDAS,
         "trim_levels": [
-            {"n_demos": TRIM_SPECS[t][1], "accuracy": float(acc[t]),
-             "avg_input_tokens": float(costs[t])} for t in range(N_TRIM)
+            {
+                "n_demos": TRIM_SPECS[t][1],
+                "accuracy": float(acc[t]),
+                "avg_input_tokens": float(costs[t]),
+            }
+            for t in range(N_TRIM)
         ],
         "frontier": {k: [[float(a), float(b)] for a, b in v] for k, v in frontier.items()},
     }
@@ -187,7 +208,8 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False):
         f"{len(items)} items across {n_tasks} tasks, exact-match.\n"
         "\\begin{tabular}{lrr}\n\\toprule\n"
         "Policy & Accuracy & Avg.\\ input tokens \\\\\n\\midrule\n"
-        + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (FIGURE_DIR / "bbh_trim_table.tex").write_text(tex)
 
@@ -196,9 +218,11 @@ def _write_outputs(items, quality, in_tokens, model, n_tasks, quiet=False):
     print(f"\nfew-shot trimming on {model} ({len(items)} items, {n_tasks} BBH tasks):")
     for t in range(N_TRIM):
         print(f"  {TRIM_SPECS[t][1]}-shot: acc={acc[t]:.3f}  tokens={costs[t]:.0f}")
-    print(f"  adaptive(lam=0.3): acc={adapt_acc:.3f} tok={adapt_tok:.0f}  |  "
-          f"best-fixed: acc={acc[best_fixed]:.3f} tok={costs[best_fixed]:.0f}  |  "
-          f"oracle: acc={orc_acc:.3f} tok={orc_tok:.0f}")
+    print(
+        f"  adaptive(lam=0.3): acc={adapt_acc:.3f} tok={adapt_tok:.0f}  |  "
+        f"best-fixed: acc={acc[best_fixed]:.3f} tok={costs[best_fixed]:.0f}  |  "
+        f"oracle: acc={orc_acc:.3f} tok={orc_tok:.0f}"
+    )
     try:
         out = _plot(acc, costs, frontier, model)
         print(f"\nwrote json+table to {FIGURE_DIR} and figure to {out} (+ .png)")
@@ -212,11 +236,21 @@ def _plot(acc, costs, frontier, model):
 
     fig, ax = plt.subplots(figsize=(6.8, 4.8))
     order = np.argsort(costs)
-    ax.plot(np.asarray(costs)[order], np.asarray(acc)[order], "o-", color=PALETTE["blue"],
-            label="fixed few-shot level")
+    ax.plot(
+        np.asarray(costs)[order],
+        np.asarray(acc)[order],
+        "o-",
+        color=PALETTE["blue"],
+        label="fixed few-shot level",
+    )
     for t in range(N_TRIM):
-        ax.annotate(f"{TRIM_SPECS[t][1]}-shot", (costs[t], acc[t]), fontsize=7,
-                    xytext=(4, 4), textcoords="offset points")
+        ax.annotate(
+            f"{TRIM_SPECS[t][1]}-shot",
+            (costs[t], acc[t]),
+            fontsize=7,
+            xytext=(4, 4),
+            textcoords="offset points",
+        )
     for key, col, mk, lab in [
         ("adaptive", PALETTE["red"], "*", "adaptive per-task (ours)"),
         ("oracle", PALETTE["green"], "D", "per-item oracle"),
@@ -253,11 +287,20 @@ def main() -> None:
     else:
         try:
             items, demos_by_task, tasks = load_bbh(tasks, args.n_per)
-            quality, in_tokens = measure_real(items, demos_by_task, args.region, args.cache,
-                                              args.max_calls, args.max_spend, npz_cache)
+            quality, in_tokens = measure_real(
+                items,
+                demos_by_task,
+                args.region,
+                args.cache,
+                args.max_calls,
+                args.max_spend,
+                npz_cache,
+            )
         except Exception as e:  # noqa: BLE001
-            print(f"Real run unavailable ({type(e).__name__}: {e}). Needs bench extra + Bedrock. "
-                  "Smoke-test: --mock")
+            print(
+                f"Real run unavailable ({type(e).__name__}: {e}). Needs bench extra + Bedrock. "
+                "Smoke-test: --mock"
+            )
             return
         model_label, n_tasks = MODEL, len(tasks)
 

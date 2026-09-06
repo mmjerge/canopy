@@ -19,15 +19,17 @@ from canopy.llm.base import Generation
 
 # Transient Bedrock errors worth retrying with backoff (vs. a hard config/access error). Matched
 # by exception class name so we need not import each botocore error factory type.
-_TRANSIENT_ERRORS = frozenset({
-    "ThrottlingException",
-    "ModelTimeoutException",
-    "ServiceUnavailableException",
-    "InternalServerException",
-    "ModelNotReadyException",
-    "ServiceQuotaExceededException",
-    "TooManyRequestsException",
-})
+_TRANSIENT_ERRORS = frozenset(
+    {
+        "ThrottlingException",
+        "ModelTimeoutException",
+        "ServiceUnavailableException",
+        "InternalServerException",
+        "ModelNotReadyException",
+        "ServiceQuotaExceededException",
+        "TooManyRequestsException",
+    }
+)
 
 # Approximate USD price per 1K tokens (input, output); override as needed / per region.
 DEFAULT_PRICING: dict[str, tuple[float, float]] = {
@@ -126,6 +128,8 @@ class BedrockClient:
                 if type(e).__name__ not in _TRANSIENT_ERRORS or attempt == self.max_retries:
                     raise
                 time.sleep(min(2.0**attempt + random.random(), 30.0))
+        # The loop above always either breaks with a response or raises on the final retry.
+        assert resp is not None
         blocks = resp.get("output", {}).get("message", {}).get("content", [])
         # Concatenate all text blocks; reasoning models (e.g. DeepSeek R1) also emit
         # non-text "reasoningContent" blocks, which carry no "text" key and are skipped.

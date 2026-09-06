@@ -62,8 +62,15 @@ def extract_script(text: str) -> str:
     return text.strip() + "\n" if text.strip() else ""
 
 
-def run_harbor(task_path: str, script: str, *, jobs_dir: str, harbor_bin: str = "harbor",
-               timeout: int = 1800, extra_args: list | None = None) -> None:
+def run_harbor(
+    task_path: str,
+    script: str,
+    *,
+    jobs_dir: str,
+    harbor_bin: str = "harbor",
+    timeout: int = 1800,
+    extra_args: list | None = None,
+) -> None:
     """Run one candidate script in a fresh Harbor container for the task at ``task_path``.
 
     Validated against harbor 0.18 on the box: a single local task runs via ``harbor run -p
@@ -75,13 +82,20 @@ def run_harbor(task_path: str, script: str, *, jobs_dir: str, harbor_bin: str = 
     env = dict(os.environ)
     env[_SOLUTION_ENV] = base64.b64encode(script.encode()).decode()
     cmd = [
-        harbor_bin, "run",
-        "-p", str(task_path),
-        "-a", AGENT_IMPORT,
-        "--ae", f"{_SOLUTION_ENV}={env[_SOLUTION_ENV]}",  # pass through to the agent phase
-        "-k", "1",
-        "-o", str(jobs_dir),
-        "-y", "--quiet",
+        harbor_bin,
+        "run",
+        "-p",
+        str(task_path),
+        "-a",
+        AGENT_IMPORT,
+        "--ae",
+        f"{_SOLUTION_ENV}={env[_SOLUTION_ENV]}",  # pass through to the agent phase
+        "-k",
+        "1",
+        "-o",
+        str(jobs_dir),
+        "-y",
+        "--quiet",
     ]
     if extra_args:
         cmd += list(extra_args)
@@ -197,9 +211,15 @@ def test_feedback(outcome: dict) -> str:
     return f"{nfail} of {total} tests still fail after your script. Reconsider the approach."
 
 
-def grade_candidates(task: dict, scripts: list[str], *, jobs_dir: str | Path,
-                     harbor_bin: str = "harbor", timeout: int = 1800,
-                     tag: str = "c") -> list[dict]:
+def grade_candidates(
+    task: dict,
+    scripts: list[str],
+    *,
+    jobs_dir: str | Path,
+    harbor_bin: str = "harbor",
+    timeout: int = 1800,
+    tag: str = "c",
+) -> list[dict]:
     """Grade several candidate scripts for ONE task, each in its own fresh Harbor container.
 
     Unlike SWE-bench (where one harness run graded many predictions), Harbor grades one agent run
@@ -216,8 +236,9 @@ def grade_candidates(task: dict, scripts: list[str], *, jobs_dir: str | Path,
             continue
         cell_dir = jd / f"{task_id}_{tag}_cand{k}"
         cell_dir.mkdir(parents=True, exist_ok=True)
-        run_harbor(task_path, script, jobs_dir=str(cell_dir), harbor_bin=harbor_bin,
-                   timeout=timeout)
+        run_harbor(
+            task_path, script, jobs_dir=str(cell_dir), harbor_bin=harbor_bin, timeout=timeout
+        )
         outcomes[k] = parse_results(cell_dir, task_id)
     return outcomes
 
@@ -242,8 +263,13 @@ class MockGrader:
             if "FIX" in script:  # mock generator's "solved" signal
                 quality = min(1.0, quality + 0.5)
             npass = round(quality * self.n_tests)
-            out.append({"resolved": npass == self.n_tests, "tests_pass": npass,
-                        "tests_total": self.n_tests})
+            out.append(
+                {
+                    "resolved": npass == self.n_tests,
+                    "tests_pass": npass,
+                    "tests_total": self.n_tests,
+                }
+            )
         return out
 
 
@@ -263,6 +289,11 @@ def load_terminalbench_tasks(n: int, tasks_dir: str | Path) -> list[dict]:
         instr = d / "instruction.md"
         if not d.is_dir() or not instr.exists():
             continue
-        tasks.append({"task_id": d.name, "task_path": str(d),
-                      "instruction": instr.read_text(errors="replace")})
+        tasks.append(
+            {
+                "task_id": d.name,
+                "task_path": str(d),
+                "instruction": instr.read_text(errors="replace"),
+            }
+        )
     return tasks

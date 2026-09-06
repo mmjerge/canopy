@@ -39,6 +39,7 @@ def main() -> None:
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from _plotstyle import PALETTE, save_figure, set_style
+
     set_style()
     import matplotlib.pyplot as plt
     import numpy as np
@@ -47,14 +48,28 @@ def main() -> None:
 
     # Panel A: ON vs OFF (TTFT p50 bars; throughput annotated)
     on, off = onoff["configs"]["on"], onoff["configs"]["off"]
-    axA.bar(["ON", "OFF"], [on["ttft_p50"], off["ttft_p50"]],
-            color=[PALETTE["red"], PALETTE["gray"]], width=0.6)
+    axA.bar(
+        ["ON", "OFF"],
+        [on["ttft_p50"], off["ttft_p50"]],
+        color=[PALETTE["red"], PALETTE["gray"]],
+        width=0.6,
+    )
     axA.set_ylabel("TTFT p50 (s)")
     axA.set_title("(a) Prefix caching ON vs OFF")
-    axA.annotate(f"{on['throughput_tok_s']:.0f} tok/s", ("ON", on["ttft_p50"]),
-                 ha="center", va="bottom", fontsize=8)
-    axA.annotate(f"{off['throughput_tok_s']:.0f} tok/s", ("OFF", off["ttft_p50"]),
-                 ha="center", va="bottom", fontsize=8)
+    axA.annotate(
+        f"{on['throughput_tok_s']:.0f} tok/s",
+        ("ON", on["ttft_p50"]),
+        ha="center",
+        va="bottom",
+        fontsize=8,
+    )
+    axA.annotate(
+        f"{off['throughput_tok_s']:.0f} tok/s",
+        ("OFF", off["ttft_p50"]),
+        ha="center",
+        va="bottom",
+        fontsize=8,
+    )
 
     # Panel B: budget frontier (TTFT log-y + hit rate twin axis)
     pts = sorted(budget["points"], key=lambda p: p["blocks"])
@@ -65,8 +80,13 @@ def main() -> None:
     axB.set_ylabel("TTFT p50 (s, log)")
     axB.set_title("(b) Savings vs KV budget")
     axB2 = axB.twinx()
-    axB2.plot(b, [(p.get("prefix_cache_hit_rate") or 0) for p in pts], "s--",
-              color=PALETTE["blue"], label="hit rate")
+    axB2.plot(
+        b,
+        [(p.get("prefix_cache_hit_rate") or 0) for p in pts],
+        "s--",
+        color=PALETTE["blue"],
+        label="hit rate",
+    )
     axB2.set_ylabel("prefix-cache hit rate")
 
     # Panel C: policy comparison (stationary vs post-shift)

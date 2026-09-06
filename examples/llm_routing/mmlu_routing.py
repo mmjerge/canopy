@@ -22,8 +22,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _plotstyle import progress  # noqa: E402
 
-from canopy.bandits import PrefixTreeRouting, run_router
-from canopy.llm import DEFAULT_PRICING, BedrockClient, BudgetError, CachingLLMClient
+from canopy.bandits import PrefixTreeRouting, run_router  # noqa: E402
+from canopy.llm import DEFAULT_PRICING, BedrockClient, BudgetError, CachingLLMClient  # noqa: E402
 
 SUBJECTS = [
     "elementary_mathematics",
@@ -162,7 +162,7 @@ def main() -> None:
         "--bernoulli",
         action="store_true",
         help="replay noise model: observe Bernoulli(q) per routed query (faithful for a 0/1 "
-             "accuracy matrix) instead of q + Gaussian noise; outputs get a _bernoulli tag",
+        "accuracy matrix) instead of q + Gaussian noise; outputs get a _bernoulli tag",
     )
     ap.add_argument(
         "--trials",
@@ -285,8 +285,14 @@ def main() -> None:
         label = strat
         for s in range(n_trials):
             env = PrefixTreeRouting(
-                2, 5, quality, rel_costs, lam=0.3, noise_std=0.05,
-                bernoulli=args.bernoulli, rng=np.random.default_rng(s)
+                2,
+                5,
+                quality,
+                rel_costs,
+                lam=0.3,
+                noise_std=0.05,
+                bernoulli=args.bernoulli,
+                rng=np.random.default_rng(s),
             )
             r = run_router(env, horizon, np.random.default_rng(1000 + s), strategy=strat, **kw)
             label = r.label
@@ -296,9 +302,11 @@ def main() -> None:
             cst.append(r.total_cost / horizon)
         results[label] = _aggregate(np.array(curves), np.array(fr), np.array(aq), np.array(cst))
         a = results[label]
-        print(f"  {label:18s} regret={a['final_regret']:7.1f}±{a['final_regret_ci']:.1f}  "
-              f"avg_quality={a['avg_quality']:.3f}±{a['avg_quality_ci']:.3f}  "
-              f"rel_cost/q={a['cost']:.3f}±{a['cost_ci']:.3f}")
+        print(
+            f"  {label:18s} regret={a['final_regret']:7.1f}±{a['final_regret_ci']:.1f}  "
+            f"avg_quality={a['avg_quality']:.3f}±{a['avg_quality_ci']:.3f}  "
+            f"rel_cost/q={a['cost']:.3f}±{a['cost_ci']:.3f}"
+        )
 
     tag = "_bernoulli" if args.bernoulli else ""
     _write_tables(models, quality, costs, results, tag=tag)
@@ -317,9 +325,12 @@ def _aggregate(curves, fr, aq, cst) -> dict:
         "cum_regret": curves.mean(axis=0),
         "cum_regret_lo": np.percentile(curves, 2.5, axis=0),
         "cum_regret_hi": np.percentile(curves, 97.5, axis=0),
-        "final_regret": float(fr.mean()), "final_regret_ci": _ci95(fr),
-        "avg_quality": float(aq.mean()), "avg_quality_ci": _ci95(aq),
-        "cost": float(cst.mean()), "cost_ci": _ci95(cst),
+        "final_regret": float(fr.mean()),
+        "final_regret_ci": _ci95(fr),
+        "avg_quality": float(aq.mean()),
+        "avg_quality_ci": _ci95(aq),
+        "cost": float(cst.mean()),
+        "cost_ci": _ci95(cst),
         "n_trials": int(curves.shape[0]),
     }
 
@@ -328,8 +339,9 @@ def _latex_escape(s: str) -> str:
     return s.replace("_", r"\_")
 
 
-def _write_tables(models: list[str], quality: np.ndarray, costs: np.ndarray, results: dict,
-                  tag: str = "") -> None:
+def _write_tables(
+    models: list[str], quality: np.ndarray, costs: np.ndarray, results: dict, tag: str = ""
+) -> None:
     """Write LaTeX tables (per-model measurements + routing comparison) and echo to console."""
     import sys
 
@@ -385,8 +397,10 @@ def _write_tables(models: list[str], quality: np.ndarray, costs: np.ndarray, res
         + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (tdir / f"mmlu_routing{tag}_table.tex").write_text(strat_tex)
-    print(f"\nwrote LaTeX tables to {tdir}/mmlu_models_table.tex and mmlu_routing_table.tex "
-          f"({n_trials} seeds, 95% CI)")
+    print(
+        f"\nwrote LaTeX tables to {tdir}/mmlu_models_table.tex and mmlu_routing_table.tex "
+        f"({n_trials} seeds, 95% CI)"
+    )
 
 
 def _plot(results: dict, quality: np.ndarray, tag: str = "") -> None:
@@ -412,8 +426,9 @@ def _plot(results: dict, quality: np.ndarray, tag: str = "") -> None:
         color, ls, _ = styling.get(label, (PALETTE["purple"], "-", "o"))
         x = np.arange(1, len(r["cum_regret"]) + 1)
         axA.plot(x, r["cum_regret"], color=color, ls=ls, label=label)
-        axA.fill_between(x, r["cum_regret_lo"], r["cum_regret_hi"], color=color, alpha=0.15,
-                         linewidth=0)
+        axA.fill_between(
+            x, r["cum_regret_lo"], r["cum_regret_hi"], color=color, alpha=0.15, linewidth=0
+        )
     axA.set_xlabel("prompts seen")
     axA.set_ylabel("cumulative routing regret")
     axA.set_title(f"Online learners (solid) vs. references (dashed), {n_trials} seeds (95% CI)")
@@ -421,11 +436,23 @@ def _plot(results: dict, quality: np.ndarray, tag: str = "") -> None:
     for label, r in results.items():
         color, _, marker = styling.get(label, (PALETTE["purple"], "-", "o"))
         axB.errorbar(
-            [r["cost"]], [r["avg_quality"]], xerr=[r["cost_ci"]], yerr=[r["avg_quality_ci"]],
-            fmt=marker, color=color, ms=11, capsize=3, zorder=3,
+            [r["cost"]],
+            [r["avg_quality"]],
+            xerr=[r["cost_ci"]],
+            yerr=[r["avg_quality_ci"]],
+            fmt=marker,
+            color=color,
+            ms=11,
+            capsize=3,
+            zorder=3,
         )
-        axB.annotate(label, (r["cost"], r["avg_quality"]), fontsize=8, xytext=(6, 4),
-                     textcoords="offset points")
+        axB.annotate(
+            label,
+            (r["cost"], r["avg_quality"]),
+            fontsize=8,
+            xytext=(6, 4),
+            textcoords="offset points",
+        )
     axB.set_xlabel("relative cost per query")
     axB.set_ylabel("average quality (accuracy)")
     axB.set_title("Cost vs. quality (95% CI)")

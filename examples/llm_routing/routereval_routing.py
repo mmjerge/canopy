@@ -20,14 +20,14 @@ The claim under test is the same regional one as RouterBench, on a quality axis:
 router beats the flat learner and the best fixed model, approaching the oracle. Offline; needs the
 ``bench`` extra (datasets/hf) and scikit-learn for clustering.
 
-Run:  ~/canopy/.venv/bin/python examples/llm_routing/routereval_routing.py --pool-tier hard --pool-size 10
+Run:  ~/canopy/.venv/bin/python examples/llm_routing/routereval_routing.py \
+    --pool-tier hard --pool-size 10
 """
 
 from __future__ import annotations
 
 import argparse
 import io
-import os
 import pickle
 import sys
 import zipfile
@@ -41,8 +41,20 @@ from _plotstyle import progress  # noqa: E402
 FIGDIR = Path(__file__).resolve().parents[2] / "paper" / "figures"
 
 # the 12 RouterEval evaluations (each a separate pickle in router_dataset/)
-EVALS = ["arc", "bbh", "gpqa", "gsm8k", "harness_truthfulqa_mc_0", "hellaswag", "ifeval",
-         "mmlu", "humaneval", "mbpp", "winogrande", "mt_bench"]
+EVALS = [
+    "arc",
+    "bbh",
+    "gpqa",
+    "gsm8k",
+    "harness_truthfulqa_mc_0",
+    "hellaswag",
+    "ifeval",
+    "mmlu",
+    "humaneval",
+    "mbpp",
+    "winogrande",
+    "mt_bench",
+]
 UCB_C = 0.3
 
 
@@ -71,8 +83,13 @@ def load_eval(z, name: str, tier: str, size: int, group: str):
     te_e = np.asarray(emb["test_embed"], dtype=float)
     tr_e = tr_e.reshape(tr_e.shape[0], -1)
     te_e = te_e.reshape(te_e.shape[0], -1)
-    return (np.asarray(d["train_score"], float), np.asarray(d["test_score"], float),
-            tr_e, te_e, list(node["model"]))
+    return (
+        np.asarray(d["train_score"], float),
+        np.asarray(d["test_score"], float),
+        tr_e,
+        te_e,
+        list(node["model"]),
+    )
 
 
 def _regions(train_embed, test_embed, k, seed):
@@ -85,7 +102,7 @@ def _regions(train_embed, test_embed, k, seed):
 
 
 def eval_one(train_score, test_score, train_embed, test_embed, k, seed):
-    """Region-contextual router vs baselines on one evaluation; returns dict of mean test accuracy."""
+    """Region-contextual router vs baselines on one eval; returns dict of mean test accuracy."""
     rng = np.random.default_rng(seed)
     n_tr, n_models = train_score.shape
     tr_reg, te_reg, k = _regions(train_embed, test_embed, k, seed)
@@ -132,8 +149,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pool-tier", default="hard", choices=["easy", "hard"])
     ap.add_argument("--pool-size", type=int, default=10)
-    ap.add_argument("--group", default="strong_to_weak",
-                    choices=["all_strong", "all_weak", "strong_to_weak"])
+    ap.add_argument(
+        "--group", default="strong_to_weak", choices=["all_strong", "all_weak", "strong_to_weak"]
+    )
     ap.add_argument("--regions", type=int, default=8, help="embedding clusters per evaluation")
     ap.add_argument("--seeds", type=int, default=8)
     args = ap.parse_args()
@@ -148,13 +166,16 @@ def main() -> None:
         print("No RouterEval evaluations found in router_dataset.zip")
         return
 
-    print(f"RouterEval quality-routing: {len(evals)} evals, pool={args.pool_tier}[{args.pool_size}]"
-          f" ({args.group}), {args.regions} regions, {args.seeds} seeds")
+    print(
+        f"RouterEval quality-routing: {len(evals)} evals, pool={args.pool_tier}[{args.pool_size}]"
+        f" ({args.group}), {args.regions} regions, {args.seeds} seeds"
+    )
     per_policy = {k: [] for k in ("oracle", "regional", "flat", "best_fixed", "random")}
     for name in progress(evals, "routereval evals", total=len(evals)):
         try:
             tr_s, te_s, tr_e, te_e, models = load_eval(
-                z, name, args.pool_tier, args.pool_size, args.group)
+                z, name, args.pool_tier, args.pool_size, args.group
+            )
         except Exception as e:  # noqa: BLE001
             print(f"  [skip {name}] {type(e).__name__}: {str(e)[:80]}")
             continue
@@ -163,11 +184,13 @@ def main() -> None:
             for k, v in res.items():
                 per_policy[k].append(v)
 
-    order = [("oracle", "per-prompt oracle (upper bound)"),
-             ("regional", "region-contextual router (ours)"),
-             ("best_fixed", "best fixed model (test-chosen)"),
-             ("flat", "structure-blind flat learner"),
-             ("random", "random model")]
+    order = [
+        ("oracle", "per-prompt oracle (upper bound)"),
+        ("regional", "region-contextual router (ours)"),
+        ("best_fixed", "best fixed model (test-chosen)"),
+        ("flat", "structure-blind flat learner"),
+        ("random", "random model"),
+    ]
     FIGDIR.mkdir(parents=True, exist_ok=True)
     rows = []
     print("\npolicy                              accuracy [95% CI]")
@@ -183,7 +206,8 @@ def main() -> None:
         f"over {len(evals)} evals x {args.seeds} seeds, pool {args.pool_tier}[{args.pool_size}] "
         f"{args.group}, {args.regions} embedding regions.\n"
         "\\begin{tabular}{lc}\n\\toprule\nPolicy & Accuracy [95\\% CI] \\\\\n\\midrule\n"
-        + "\n".join(rows) + "\n\\bottomrule\n\\end{tabular}\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n"
     )
     (FIGDIR / "routereval_routing_table.tex").write_text(tex)
     print(f"\nwrote table to {FIGDIR}/routereval_routing_table.tex")
