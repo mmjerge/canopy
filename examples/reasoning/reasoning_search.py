@@ -326,6 +326,7 @@ def run_level(
     prompts=MATH_PROMPTS,
     value_factory=None,
     select=None,
+    max_tokens=512,
 ):
     """Run both strategies over all problems at one budget level; return per-problem 0/1 lists.
 
@@ -348,6 +349,7 @@ def run_level(
             gold,
             generate,
             n=bo_n,
+            max_tokens=max_tokens,
             extract_fn=extract_fn,
             grade_fn=grade_fn,
             prompts=prompts,
@@ -357,6 +359,7 @@ def run_level(
             q,
             gold,
             generate,
+            max_tokens=max_tokens,
             branching=branching,
             n_steps=n_steps,
             rollouts=rollouts,
@@ -568,6 +571,13 @@ def main() -> None:
         help="comma-separated n_steps values (each is one matched-budget level); "
         "empty uses the benchmark's default sweep",
     )
+    ap.add_argument(
+        "--max-tokens",
+        type=int,
+        default=512,
+        help="per-completion token cap; verbose thinking models (claude-sonnet-5, "
+        "gpt-5.6) truncate before reaching a final answer at the 512 default",
+    )
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="")
@@ -613,7 +623,7 @@ def main() -> None:
         try:
             from canopy.llm import BedrockClient, BudgetError, CachingLLMClient, as_generate_fn
 
-            base = BedrockClient(region=args.region, max_tokens=512)
+            base = BedrockClient(region=args.region, max_tokens=args.max_tokens)
             client = CachingLLMClient(
                 base, cache, max_calls=args.max_calls, max_spend_usd=args.max_spend
             )
@@ -663,6 +673,7 @@ def main() -> None:
                 prompts=prompts,
                 value_factory=value_factory,
                 select=select,
+                max_tokens=args.max_tokens,
             )
         except budget_error as e:
             print(f"\n[budget stop] {e}  (completed {i}/{len(depths)} levels)")
