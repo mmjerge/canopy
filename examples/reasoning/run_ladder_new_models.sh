@@ -15,14 +15,32 @@ unset AWS_BEARER_TOKEN_BEDROCK 2>/dev/null || true
 export AWS_PROFILE=mjerge-Admin
 PY=.venv/bin/python
 
+creds_ok() {
+  aws sts get-caller-identity --output text >/dev/null 2>&1
+}
+
 run() {
   local bench=$1 n=$2
+  if ! creds_ok; then
+    echo "!!! $TAG / $bench NOT STARTED: credentials dead (run mwinit, then re-run this script)"
+    exit 1
+  fi
   echo "=== $TAG / $bench (n=$n) started $(date '+%F %T') ==="
   $PY examples/reasoning/reasoning_search.py \
     --benchmark "$bench" --n-problems "$n" --model "$MODEL" --tag "$TAG" \
     --max-tokens 2048 --workers 8 --max-spend 300 --resume \
     2>&1 | tee -a "logs/reasoning_${bench}_${TAG}.log"
-  echo "=== $TAG / $bench finished $(date '+%F %T') ==="
+  local rc=${PIPESTATUS[0]}
+  if [ "$rc" -ne 0 ]; then
+    echo "!!! $TAG / $bench FAILED (exit $rc) $(date '+%F %T') -- stopping; fix creds and re-run"
+    exit "$rc"
+  fi
+  # a level saved with skipped problems is a biased subset, not a result
+  if tail -50 "logs/reasoning_${bench}_${TAG}.log" | grep -q "skipped after retries"; then
+    echo "!!! $TAG / $bench had SKIPPED PROBLEMS -- its levels are suspect; strip them and re-run"
+    exit 1
+  fi
+  echo "=== $TAG / $bench finished clean $(date '+%F %T') ==="
 }
 
 run math 300
