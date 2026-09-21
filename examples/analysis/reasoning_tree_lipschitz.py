@@ -245,13 +245,13 @@ def characterize(problems, generate, cfg, extract_fn, grade_fn, tau, budget_erro
     }
 
 
-def _write_outputs(agg, model, bench, n_problems):
+def _write_outputs(agg, model, bench, n_problems, tag=""):
     FIGDIR.mkdir(parents=True, exist_ok=True)
     r_p = _pearson(agg["cheap"], agg["true"])
     r_s = _spearman(agg["cheap"], agg["true"])
     steps = np.array(agg["n_steps_seen"], float)
     base = 1.0 / max(2, agg["branching"])  # edge-hit rate a random pick would achieve
-    stem = f"reasoning_tree_lipschitz_{bench}"
+    stem = f"reasoning_tree_lipschitz_{bench}" + (f"_{tag}" if tag else "")
     payload = {
         "benchmark": bench,
         "model": model,
@@ -320,13 +320,13 @@ def _write_outputs(agg, model, bench, n_problems):
         + ", ".join(f"{v:.2f}" for v in agg["path_value_by_step"])
     )
     try:
-        out = _plot(agg, payload, model, bench, n_problems)
+        out = _plot(agg, payload, model, bench, n_problems, tag=tag)
         print(f"  wrote json+table to {FIGDIR} and figure to {out} (+ .png)")
     except Exception as e:  # noqa: BLE001
         print(f"  wrote json+table to {FIGDIR} (figure skipped: {type(e).__name__}: {e})")
 
 
-def _plot(agg, payload, model, bench, n_problems):
+def _plot(agg, payload, model, bench, n_problems, tag=""):
     from _plotstyle import PALETTE, save_figure, set_style
 
     set_style()
@@ -372,7 +372,7 @@ def _plot(agg, payload, model, bench, n_problems):
         f"({n_problems} {bench.upper()}, {model})"
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    return str(save_figure(fig, f"reasoning_tree_lipschitz_{bench}"))
+    return str(save_figure(fig, f"reasoning_tree_lipschitz_{bench}" + (f"_{tag}" if tag else "")))
 
 
 BENCHMARKS = {"math": extract_boxed_answer, "gsm8k": extract_answer}
@@ -404,6 +404,13 @@ def main() -> None:
         default=8,
         help="problems to run concurrently (I/O-bound; ~linear speedup)",
     )
+    ap.add_argument("--tag", default="", help="suffix for output files, e.g. a model label")
+    ap.add_argument(
+        "--max-tokens",
+        type=int,
+        default=512,
+        help="per-completion cap; verbose thinking models need 2048",
+    )
     ap.add_argument("--max-calls", type=int, default=None)
     ap.add_argument("--max-spend", type=float, default=None)
     ap.add_argument("--cache", default="")
@@ -432,7 +439,7 @@ def main() -> None:
             from canopy.llm import BedrockClient, BudgetError, CachingLLMClient, as_generate_fn
 
             cache = args.cache or f"examples/.cache/reasoning_{args.benchmark}.jsonl"
-            base = BedrockClient(region=args.region, max_tokens=512)
+            base = BedrockClient(region=args.region, max_tokens=args.max_tokens)
             client = CachingLLMClient(
                 base, cache, max_calls=args.max_calls, max_spend_usd=args.max_spend
             )
@@ -466,7 +473,7 @@ def main() -> None:
     except budget_error as e:
         print(f"[budget stop] {e}")
         return
-    _write_outputs(agg, model_label, args.benchmark, len(problems))
+    _write_outputs(agg, model_label, args.benchmark, len(problems), tag=args.tag)
 
 
 if __name__ == "__main__":
