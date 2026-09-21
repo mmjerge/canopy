@@ -12,10 +12,6 @@ leaf is **expensive but unbiased**. The question this repo answers: *when does t
 structure (the smoothness prior) let you identify good leaves, or minimize regret, at lower cost
 than a structure-blind baseline?*
 
-Target venue: ICLR / ICML. The paper draft lives in `paper/` (LaTeX, gitignored — see
-`paper/README.md` if present locally). For the current status of every claim — theory,
-synthetic, and real-model — see **`docs/review_changes_and_runbook.md`**.
-
 ## Install
 
 ```bash
